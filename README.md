@@ -7,6 +7,7 @@ Lightweight, asynchronous HTTP/HTTPS proxy written in C.
 - HTTP request forwarding with header rewriting
 - HTTPS tunneling via CONNECT method
 - Single-threaded, non-blocking I/O using poll(2)
+- Asynchronous DNS resolution via forked processes
 - Small memory footprint (~24 KB per connection)
 - Configuration file with ACL support
 - Privilege dropping after bind
@@ -106,7 +107,6 @@ Example whitelist:
 
 - Maximum 512 concurrent connections (configurable)
 - 8 KB buffer per direction per connection
-- DNS resolution is synchronous (blocking)
 
 ## License
 

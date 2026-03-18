@@ -137,6 +137,10 @@ forces
 .Cm Connection: close ,
 and forwards the request to the upstream server.
 .Pp
+DNS resolution is performed asynchronously by forking a short-lived
+child process for each lookup, preventing slow responses from blocking
+the event loop.
+.Pp
 For HTTPS requests using the CONNECT method, the proxy establishes a
 TCP tunnel to the upstream host and relays data bidirectionally without
 inspecting the encrypted traffic.
@@ -155,7 +159,7 @@ On
 .Ox ,
 .Xr pledge 2
 is used to restrict system calls to
-.Cm stdio inet dns .
+.Cm stdio inet dns proc .
 .Pp
 .Nm
 does not inspect, decrypt, or modify HTTPS traffic.

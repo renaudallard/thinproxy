@@ -69,6 +69,7 @@
 
 enum conn_state {
 	S_REQUEST,	/* reading request from client */
+	S_RESOLVING,	/* async DNS resolution */
 	S_CONNECTING,	/* async connect to upstream */
 	S_RESPONSE,	/* sending CONNECT 200 to client */
 	S_RELAY		/* bidirectional data relay */
@@ -77,7 +78,8 @@ enum conn_state {
 enum fd_type {
 	FD_LISTEN,
 	FD_CLIENT,
-	FD_SERVER
+	FD_SERVER,
+	FD_RESOLVE
 };
 
 enum acl_mode {
@@ -95,9 +97,19 @@ struct acl_entry {
 	int		prefixlen;
 };
 
+struct dns_result {
+	int		err;
+	int		family;
+	int		socktype;
+	int		protocol;
+	socklen_t	addrlen;
+	struct sockaddr_storage addr;
+};
+
 struct conn {
 	int		cfd;		/* client file descriptor */
 	int		sfd;		/* server file descriptor */
+	int		rfd;		/* DNS resolve pipe fd */
 	enum conn_state	state;
 	int		is_connect;
 	int		ceof;		/* client EOF received */
@@ -240,6 +252,10 @@ conn_close(struct conn *c)
 {
 	if (c == NULL)
 		return;
+	if (c->rfd >= 0) {
+		poll_del(c->rfd);
+		close(c->rfd);
+	}
 	if (c->cfd >= 0) {
 		poll_del(c->cfd);
 		close(c->cfd);
@@ -268,6 +284,7 @@ conn_alloc(int cfd)
 
 	c->cfd = cfd;
 	c->sfd = -1;
+	c->rfd = -1;
 	c->state = S_REQUEST;
 	c->atime = time(NULL);
 	nconns++;
@@ -800,49 +817,79 @@ build_request(const char *req, size_t reqlen,
 	return -1;
 }
 
-/* ---- upstream connection ---- */
+/* ---- async DNS resolution ---- */
 
-static int
-upstream_connect(const char *host, const char *port)
+static void __attribute__((noreturn))
+dns_child(const char *host, const char *port, int wfd)
 {
-	struct addrinfo hints, *res, *r;
-	int fd = -1, err, on;
+	struct addrinfo hints, *res;
+	struct dns_result dr;
+	int err;
 
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 
+	memset(&dr, 0, sizeof(dr));
 	err = getaddrinfo(host, port, &hints, &res);
-	if (err) {
-		logmsg(LOG_WARNING, "resolve %s:%s: %s",
-		    host, port, gai_strerror(err));
+	if (err != 0 || res == NULL) {
+		dr.err = -1;
+		(void)write(wfd, &dr, sizeof(dr));
+		_exit(0);
+	}
+
+	dr.err = 0;
+	dr.family = res->ai_family;
+	dr.socktype = res->ai_socktype;
+	dr.protocol = res->ai_protocol;
+	dr.addrlen = res->ai_addrlen;
+	memcpy(&dr.addr, res->ai_addr, res->ai_addrlen);
+	freeaddrinfo(res);
+
+	(void)write(wfd, &dr, sizeof(dr));
+	_exit(0);
+}
+
+static int
+dns_resolve_start(struct conn *c, const char *host, const char *port)
+{
+	int pfd[2];
+	pid_t pid;
+
+	if (pipe(pfd) == -1) {
+		logmsg(LOG_ERR, "pipe: %s", strerror(errno));
 		return -1;
 	}
 
-	for (r = res; r != NULL; r = r->ai_next) {
-		fd = socket(r->ai_family, r->ai_socktype, r->ai_protocol);
-		if (fd == -1)
-			continue;
-		if (set_nonblock(fd) == -1) {
-			close(fd);
-			fd = -1;
-			continue;
-		}
-		on = 1;
-		(void)setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE,
-		    &on, sizeof(on));
-		set_nodelay(fd);
-		if (connect(fd, r->ai_addr, r->ai_addrlen) == -1) {
-			if (errno == EINPROGRESS)
-				break;
-			close(fd);
-			fd = -1;
-			continue;
-		}
-		break;
+	if (pfd[0] >= MAX_FDS) {
+		close(pfd[0]);
+		close(pfd[1]);
+		logmsg(LOG_ERR, "pipe fd too high");
+		return -1;
 	}
-	freeaddrinfo(res);
-	return fd;
+
+	pid = fork();
+	if (pid == -1) {
+		logmsg(LOG_ERR, "fork: %s", strerror(errno));
+		close(pfd[0]);
+		close(pfd[1]);
+		return -1;
+	}
+
+	if (pid == 0) {
+		close(pfd[0]);
+		dns_child(host, port, pfd[1]);
+		/* NOTREACHED */
+	}
+
+	close(pfd[1]);
+	if (set_nonblock(pfd[0]) == -1) {
+		close(pfd[0]);
+		return -1;
+	}
+
+	c->rfd = pfd[0];
+	return 0;
 }
 
 /* ---- state handlers ---- */
@@ -903,16 +950,80 @@ handle_request(struct conn *c)
 		c->c2s_len = (size_t)built;
 	}
 
-	c->sfd = upstream_connect(host, port);
-	if (c->sfd == -1) {
-		logmsg(LOG_WARNING, "connect %s:%s failed", host, port);
+	if (dns_resolve_start(c, host, port) == -1) {
+		logmsg(LOG_WARNING, "resolve %s:%s failed", host, port);
 		(void)write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
 		conn_close(c);
 		return;
 	}
 
-	c->state = S_CONNECTING;
+	c->state = S_RESOLVING;
 	poll_mod(c->cfd, 0);
+	if (poll_add(c->rfd, POLLIN, c, FD_RESOLVE) == -1) {
+		close(c->rfd);
+		c->rfd = -1;
+		conn_close(c);
+	}
+}
+
+static void
+handle_resolving(struct conn *c)
+{
+	struct dns_result dr;
+	ssize_t nr;
+	int fd, on;
+
+	nr = read(c->rfd, &dr, sizeof(dr));
+	if (nr == -1) {
+		if (errno == EAGAIN || errno == EINTR)
+			return;
+		conn_close(c);
+		return;
+	}
+
+	poll_del(c->rfd);
+	close(c->rfd);
+	c->rfd = -1;
+
+	if (nr != (ssize_t)sizeof(dr) || dr.err != 0) {
+		logmsg(LOG_WARNING, "DNS resolution failed");
+		(void)write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
+		conn_close(c);
+		return;
+	}
+
+	fd = socket(dr.family, dr.socktype, dr.protocol);
+	if (fd == -1 || fd >= MAX_FDS) {
+		if (fd != -1)
+			close(fd);
+		(void)write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
+		conn_close(c);
+		return;
+	}
+
+	if (set_nonblock(fd) == -1) {
+		close(fd);
+		(void)write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
+		conn_close(c);
+		return;
+	}
+
+	on = 1;
+	(void)setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
+	set_nodelay(fd);
+
+	if (connect(fd, (struct sockaddr *)&dr.addr, dr.addrlen) == -1) {
+		if (errno != EINPROGRESS) {
+			logmsg(LOG_WARNING, "connect: %s", strerror(errno));
+			close(fd);
+			(void)write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
+			conn_close(c);
+			return;
+		}
+	}
+
+	c->sfd = fd;
+	c->state = S_CONNECTING;
 	if (poll_add(c->sfd, POLLOUT, c, FD_SERVER) == -1) {
 		close(c->sfd);
 		c->sfd = -1;
@@ -1225,6 +1336,10 @@ event_loop(int lfd)
 				if (rev & (POLLIN | POLLHUP))
 					handle_request(c);
 				break;
+			case S_RESOLVING:
+				if (rev & (POLLIN | POLLHUP))
+					handle_resolving(c);
+				break;
 			case S_CONNECTING:
 				if (rev & (POLLOUT | POLLHUP | POLLERR))
 					handle_connecting(c);
@@ -1424,7 +1539,7 @@ main(int argc, char *argv[])
 	}
 
 #ifdef __OpenBSD__
-	if (pledge("stdio inet dns", NULL) == -1) {
+	if (pledge("stdio inet dns proc", NULL) == -1) {
 		logmsg(LOG_ERR, "pledge: %s", strerror(errno));
 		close(lfd);
 		return 1;
@@ -1438,6 +1553,7 @@ main(int argc, char *argv[])
 	sigaction(SIGINT, &sa, NULL);
 	sa.sa_handler = SIG_IGN;
 	sigaction(SIGPIPE, &sa, NULL);
+	sigaction(SIGCHLD, &sa, NULL);
 
 	if (poll_add(lfd, POLLIN, NULL, FD_LISTEN) == -1) {
 		logmsg(LOG_ERR, "poll_add failed");
