@@ -85,6 +85,7 @@ See `thinproxy.conf.example` for a full example.
 | `verbose <yes\|no>` | Verbose logging |
 | `max_connections <n>` | Max concurrent connections (1-512) |
 | `idle_timeout <n>` | Idle timeout in seconds |
+| `deny_private <yes\|no>` | Block connections to private/reserved addresses |
 | `connect_port <port>` | Allowed CONNECT port (whitelist, repeatable) |
 | `allow <ip[/prefix]>` | Allow source address (whitelist mode) |
 | `deny <ip[/prefix]>` | Deny source address (blacklist mode) |

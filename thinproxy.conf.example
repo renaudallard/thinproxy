@@ -23,6 +23,10 @@ port 8080
 # Close idle connections after this many seconds (default: 300)
 #idle_timeout 300
 
+# Block connections to private/reserved addresses (default: no)
+# Prevents SSRF by denying RFC 1918, loopback, link-local, etc.
+#deny_private yes
+
 # Restrict CONNECT method to specific ports (default: all ports allowed)
 # When set, CONNECT to unlisted ports is denied with 403.
 #connect_port 443

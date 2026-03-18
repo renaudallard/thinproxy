@@ -147,6 +147,7 @@ static char			cfg_port[8] = DEFAULT_PORT;
 static char			cfg_user[64];
 static int			cfg_maxconns = MAX_CONNS;
 static int			cfg_timeout = 300;
+static int			cfg_deny_private;
 
 /* ACL */
 static enum acl_mode		acl_mode;
@@ -446,6 +447,70 @@ connect_port_allowed(const char *port)
 	return 0;
 }
 
+static int
+is_private_v4(uint32_t a)
+{
+	/* 0.0.0.0/8 */
+	if ((a >> 24) == 0)
+		return 1;
+	/* 10.0.0.0/8 */
+	if ((a >> 24) == 10)
+		return 1;
+	/* 100.64.0.0/10 shared/CGN */
+	if ((a & 0xffc00000) == 0x64400000)
+		return 1;
+	/* 127.0.0.0/8 loopback */
+	if ((a >> 24) == 127)
+		return 1;
+	/* 169.254.0.0/16 link-local */
+	if ((a >> 16) == 0xa9fe)
+		return 1;
+	/* 172.16.0.0/12 */
+	if ((a & 0xfff00000) == 0xac100000)
+		return 1;
+	/* 192.168.0.0/16 */
+	if ((a >> 16) == 0xc0a8)
+		return 1;
+	/* 224.0.0.0/3 multicast + reserved */
+	if (a >= 0xe0000000)
+		return 1;
+	return 0;
+}
+
+static int
+is_private_addr(struct sockaddr *sa)
+{
+	if (sa->sa_family == AF_INET) {
+		struct sockaddr_in *sin = (struct sockaddr_in *)sa;
+		return is_private_v4(ntohl(sin->sin_addr.s_addr));
+	}
+
+	if (sa->sa_family == AF_INET6) {
+		struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)sa;
+		uint8_t *b = sin6->sin6_addr.s6_addr;
+
+		if (IN6_IS_ADDR_LOOPBACK(&sin6->sin6_addr))
+			return 1;
+		if (IN6_IS_ADDR_LINKLOCAL(&sin6->sin6_addr))
+			return 1;
+		/* fc00::/7 unique local */
+		if ((b[0] & 0xfe) == 0xfc)
+			return 1;
+		if (IN6_IS_ADDR_MULTICAST(&sin6->sin6_addr))
+			return 1;
+		if (IN6_IS_ADDR_UNSPECIFIED(&sin6->sin6_addr))
+			return 1;
+		if (IN6_IS_ADDR_V4MAPPED(&sin6->sin6_addr)) {
+			uint32_t v4;
+			memcpy(&v4, b + 12, 4);
+			return is_private_v4(ntohl(v4));
+		}
+		return 0;
+	}
+
+	return 0;
+}
+
 /* ---- configuration ---- */
 
 static int
@@ -579,6 +644,13 @@ parse_config(const char *path, int must_exist)
 				fclose(fp);
 				return -1;
 			}
+		} else if (strcasecmp(key, "deny_private") == 0) {
+			int b = parse_bool(val, path, lineno);
+			if (b == -1) {
+				fclose(fp);
+				return -1;
+			}
+			cfg_deny_private = b;
 		} else if (strcasecmp(key, "connect_port") == 0) {
 			int n = atoi(val);
 			if (n <= 0 || n > 65535) {
@@ -1037,6 +1109,14 @@ handle_resolving(struct conn *c)
 	if (nr != (ssize_t)sizeof(dr) || dr.err != 0) {
 		logmsg(LOG_WARNING, "DNS resolution failed");
 		(void)write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
+		conn_close(c);
+		return;
+	}
+
+	if (cfg_deny_private &&
+	    is_private_addr((struct sockaddr *)&dr.addr)) {
+		logmsg(LOG_WARNING, "private address denied");
+		(void)write(c->cfd, ERR_403, sizeof(ERR_403) - 1);
 		conn_close(c);
 		return;
 	}
