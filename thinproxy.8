@@ -104,6 +104,11 @@ The default is 512.
 Close connections idle for longer than
 .Ar seconds .
 The default is 300.
+.It Cm max_connections_per_ip Ar number
+Maximum concurrent connections from a single source IP address.
+New connections exceeding this limit are rejected with 503
+Service Unavailable.
+The default is 0 (unlimited).
 .It Cm deny_private Cm yes | no
 Block connections to private and reserved destination addresses.
 This includes RFC 1918 private ranges (10/8, 172.16/12, 192.168/16),

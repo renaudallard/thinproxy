@@ -110,6 +110,7 @@ struct conn {
 	int		cfd;		/* client file descriptor */
 	int		sfd;		/* server file descriptor */
 	int		rfd;		/* DNS resolve pipe fd */
+	struct sockaddr_storage	peer;	/* client address */
 	enum conn_state	state;
 	int		is_connect;
 	int		ceof;		/* client EOF received */
@@ -148,6 +149,7 @@ static char			cfg_user[64];
 static int			cfg_maxconns = MAX_CONNS;
 static int			cfg_timeout = 300;
 static int			cfg_deny_private;
+static int			cfg_maxconns_per_ip;
 
 /* ACL */
 static enum acl_mode		acl_mode;
@@ -448,6 +450,40 @@ connect_port_allowed(const char *port)
 }
 
 static int
+per_ip_check(struct sockaddr *sa)
+{
+	int fd, count;
+
+	if (cfg_maxconns_per_ip <= 0)
+		return 1;
+
+	count = 0;
+	for (fd = 0; fd < MAX_FDS; fd++) {
+		struct conn *c = fdmap[fd];
+		if (c == NULL || fdtype_arr[fd] != FD_CLIENT)
+			continue;
+		if (c->cfd != fd)
+			continue;
+		if (c->peer.ss_family != sa->sa_family)
+			continue;
+		if (sa->sa_family == AF_INET) {
+			struct sockaddr_in *a = (struct sockaddr_in *)sa;
+			struct sockaddr_in *b = (struct sockaddr_in *)&c->peer;
+			if (a->sin_addr.s_addr == b->sin_addr.s_addr)
+				count++;
+		} else if (sa->sa_family == AF_INET6) {
+			struct sockaddr_in6 *a = (struct sockaddr_in6 *)sa;
+			struct sockaddr_in6 *b = (struct sockaddr_in6 *)&c->peer;
+			if (memcmp(&a->sin6_addr, &b->sin6_addr, 16) == 0)
+				count++;
+		}
+		if (count >= cfg_maxconns_per_ip)
+			return 0;
+	}
+	return 1;
+}
+
+static int
 is_private_v4(uint32_t a)
 {
 	/* 0.0.0.0/8 */
@@ -644,6 +680,16 @@ parse_config(const char *path, int must_exist)
 				fclose(fp);
 				return -1;
 			}
+		} else if (strcasecmp(key, "max_connections_per_ip") == 0) {
+			int n = atoi(val);
+			if (n <= 0 || n > MAX_CONNS) {
+				logmsg(LOG_ERR,
+				    "%s:%d: max_connections_per_ip: 1-%d",
+				    path, lineno, MAX_CONNS);
+				fclose(fp);
+				return -1;
+			}
+			cfg_maxconns_per_ip = n;
 		} else if (strcasecmp(key, "deny_private") == 0) {
 			int b = parse_bool(val, path, lineno);
 			if (b == -1) {
@@ -1356,6 +1402,14 @@ accept_conn(int lfd)
 		return;
 	}
 
+	if (!per_ip_check((struct sockaddr *)&ss)) {
+		if (vflag)
+			logmsg(LOG_INFO, "per-IP connection limit reached");
+		(void)write(fd, ERR_503, sizeof(ERR_503) - 1);
+		close(fd);
+		return;
+	}
+
 	if (fd >= MAX_FDS) {
 		close(fd);
 		return;
@@ -1376,6 +1430,7 @@ accept_conn(int lfd)
 		close(fd);
 		return;
 	}
+	memcpy(&c->peer, &ss, sizeof(ss));
 
 	if (poll_add(fd, POLLIN, c, FD_CLIENT) == -1) {
 		c->cfd = -1;

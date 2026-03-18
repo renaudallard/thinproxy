@@ -20,6 +20,9 @@ port 8080
 # Maximum concurrent connections (default: 512, max: 512)
 #max_connections 512
 
+# Maximum concurrent connections per source IP (default: unlimited)
+#max_connections_per_ip 32
+
 # Close idle connections after this many seconds (default: 300)
 #idle_timeout 300
 
