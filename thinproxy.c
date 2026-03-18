@@ -153,6 +153,11 @@ static enum acl_mode		acl_mode;
 static struct acl_entry		acl_list[MAX_ACL];
 static int			nacl;
 
+/* CONNECT port whitelist */
+#define MAX_CONNECT_PORTS	64
+static int			connect_ports[MAX_CONNECT_PORTS];
+static int			nconnect_ports;
+
 /* forward declarations */
 static void	conn_close(struct conn *);
 static void	conn_update_poll(struct conn *);
@@ -421,6 +426,26 @@ acl_check(struct sockaddr *sa)
 	return (acl_mode == ACL_ALLOW) ? 0 : 1;
 }
 
+/*
+ * Check if a CONNECT port is allowed.
+ * Returns 1 if allowed, 0 if denied.
+ */
+static int
+connect_port_allowed(const char *port)
+{
+	int p, i;
+
+	if (nconnect_ports == 0)
+		return 1;
+
+	p = atoi(port);
+	for (i = 0; i < nconnect_ports; i++) {
+		if (connect_ports[i] == p)
+			return 1;
+	}
+	return 0;
+}
+
 /* ---- configuration ---- */
 
 static int
@@ -554,6 +579,23 @@ parse_config(const char *path, int must_exist)
 				fclose(fp);
 				return -1;
 			}
+		} else if (strcasecmp(key, "connect_port") == 0) {
+			int n = atoi(val);
+			if (n <= 0 || n > 65535) {
+				logmsg(LOG_ERR,
+				    "%s:%d: invalid port: %s",
+				    path, lineno, val);
+				fclose(fp);
+				return -1;
+			}
+			if (nconnect_ports >= MAX_CONNECT_PORTS) {
+				logmsg(LOG_ERR,
+				    "%s:%d: too many connect_port entries",
+				    path, lineno);
+				fclose(fp);
+				return -1;
+			}
+			connect_ports[nconnect_ports++] = n;
 		} else {
 			logmsg(LOG_ERR, "%s:%d: unknown directive: %s",
 			    path, lineno, key);
@@ -936,6 +978,13 @@ handle_request(struct conn *c)
 	if (vflag)
 		logmsg(LOG_INFO, "%s %s:%s%s", method, host, port,
 		    is_connect ? "" : path);
+
+	if (is_connect && !connect_port_allowed(port)) {
+		logmsg(LOG_WARNING, "CONNECT port %s denied", port);
+		(void)write(c->cfd, ERR_403, sizeof(ERR_403) - 1);
+		conn_close(c);
+		return;
+	}
 
 	if (!is_connect) {
 		ssize_t built = build_request(c->req, c->req_len,

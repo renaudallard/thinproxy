@@ -104,6 +104,15 @@ The default is 512.
 Close connections idle for longer than
 .Ar seconds .
 The default is 300.
+.It Cm connect_port Ar port
+Restrict the CONNECT method to the specified
+.Ar port .
+May be specified multiple times to allow several ports.
+When any
+.Cm connect_port
+directive is present, CONNECT requests to unlisted ports are denied
+with 403 Forbidden.
+If omitted, all ports are allowed.
 .It Cm allow Ar address Ns Op / Ns Ar prefix
 Allow connections from
 .Ar address .
