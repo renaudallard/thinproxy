@@ -1344,8 +1344,11 @@ event_loop(int lfd)
 					conn_close(c);
 				break;
 			case S_CONNECTING:
-				if (rev & (POLLOUT | POLLHUP | POLLERR))
+				if (fd == c->sfd &&
+				    (rev & (POLLOUT | POLLHUP | POLLERR)))
 					handle_connecting(c);
+				else if (fd == c->cfd)
+					conn_close(c);
 				break;
 			case S_RESPONSE:
 				if (rev & POLLOUT)
