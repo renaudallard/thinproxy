@@ -1098,9 +1098,21 @@ handle_request(struct conn *c)
 	}
 
 	c->is_connect = is_connect;
-	if (vflag)
-		logmsg(LOG_INFO, "%s %s:%s%s", method, host, port,
+	if (vflag) {
+		char logbuf[2048];
+		size_t li, ln;
+
+		ln = (size_t)snprintf(logbuf, sizeof(logbuf),
+		    "%s %s:%s%s", method, host, port,
 		    is_connect ? "" : path);
+		if (ln >= sizeof(logbuf))
+			ln = sizeof(logbuf) - 1;
+		for (li = 0; li < ln; li++) {
+			if (logbuf[li] < 0x20 || logbuf[li] >= 0x7f)
+				logbuf[li] = '?';
+		}
+		logmsg(LOG_INFO, "%s", logbuf);
+	}
 
 	if (is_connect && !connect_port_allowed(port)) {
 		logmsg(LOG_WARNING, "CONNECT port %s denied", port);
