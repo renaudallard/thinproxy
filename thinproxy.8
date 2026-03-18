@@ -1,8 +1,8 @@
 .Dd March 18, 2026
-.Dt NANOPROXY 8
+.Dt THINPROXY 8
 .Os
 .Sh NAME
-.Nm nanoproxy
+.Nm thinproxy
 .Nd lightweight asynchronous HTTP/HTTPS proxy
 .Sh SYNOPSIS
 .Nm
@@ -41,7 +41,7 @@ instead of standard error.
 Read configuration from
 .Ar config
 instead of the default
-.Pa /etc/nanoproxy.conf .
+.Pa /etc/thinproxy.conf .
 .It Fl p Ar port
 Listen on
 .Ar port .
@@ -63,7 +63,7 @@ Command-line flags override values set in the configuration file.
 .Sh CONFIGURATION FILE
 .Nm
 reads its configuration from
-.Pa /etc/nanoproxy.conf
+.Pa /etc/thinproxy.conf
 by default, or from the file specified with
 .Fl f .
 If the default file does not exist, it is silently ignored.
@@ -163,21 +163,21 @@ TLS connections are tunneled opaquely via CONNECT.
 .Sh EXAMPLES
 Start on the default address and port:
 .Pp
-.Dl $ nanoproxy
+.Dl $ thinproxy
 .Pp
 Use a custom configuration file:
 .Pp
-.Dl $ nanoproxy -f /path/to/nanoproxy.conf
+.Dl $ thinproxy -f /path/to/thinproxy.conf
 .Pp
 Listen on all interfaces, port 3128, with verbose logging:
 .Pp
-.Dl $ nanoproxy -v -b 0.0.0.0 -p 3128
+.Dl $ thinproxy -v -b 0.0.0.0 -p 3128
 .Pp
 Run as a daemon, dropping privileges to the
 .Cm nobody
 user:
 .Pp
-.Dl # nanoproxy -d -u nobody -p 8080
+.Dl # thinproxy -d -u nobody -p 8080
 .Pp
 Use with curl:
 .Pp
@@ -195,7 +195,7 @@ allow 127.0.0.1
 .Ed
 .Sh FILES
 .Bl -tag -width Ds
-.It Pa /etc/nanoproxy.conf
+.It Pa /etc/thinproxy.conf
 Default configuration file.
 .El
 .Sh EXIT STATUS

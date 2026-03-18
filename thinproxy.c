@@ -52,10 +52,10 @@
 #include <unistd.h>
 #endif
 
-#define NANOPROXY_VERSION	"1.0.0"
+#define THINPROXY_VERSION	"0.0.1"
 #define DEFAULT_ADDR		"127.0.0.1"
 #define DEFAULT_PORT		"8080"
-#define DEFAULT_CONFIG		"/etc/nanoproxy.conf"
+#define DEFAULT_CONFIG		"/etc/thinproxy.conf"
 #define BUF_SIZE		8192
 #define MAX_CONNS		512
 #define MAX_FDS			((MAX_CONNS) * 2 + 16)
@@ -1342,7 +1342,7 @@ static void __attribute__((noreturn))
 usage(void)
 {
 	fprintf(stderr,
-	    "usage: nanoproxy [-dVv] [-b address] [-f config] "
+	    "usage: thinproxy [-dVv] [-b address] [-f config] "
 	    "[-p port] [-u user]\n");
 	exit(1);
 }
@@ -1389,7 +1389,7 @@ main(int argc, char *argv[])
 			    "%s", optarg);
 			break;
 		case 'V':
-			fprintf(stderr, "nanoproxy %s\n", NANOPROXY_VERSION);
+			fprintf(stderr, "thinproxy %s\n", THINPROXY_VERSION);
 			return 0;
 		case 'v':
 			vflag = 1;
@@ -1420,7 +1420,7 @@ main(int argc, char *argv[])
 			return 1;
 		}
 		use_syslog = 1;
-		openlog("nanoproxy", LOG_PID | LOG_NDELAY, LOG_DAEMON);
+		openlog("thinproxy", LOG_PID | LOG_NDELAY, LOG_DAEMON);
 	}
 
 #ifdef __OpenBSD__
@@ -1445,8 +1445,8 @@ main(int argc, char *argv[])
 		return 1;
 	}
 
-	logmsg(LOG_INFO, "nanoproxy %s listening on %s:%s",
-	    NANOPROXY_VERSION, cfg_addr, cfg_port);
+	logmsg(LOG_INFO, "thinproxy %s listening on %s:%s",
+	    THINPROXY_VERSION, cfg_addr, cfg_port);
 
 	event_loop(lfd);
 

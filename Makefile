@@ -6,22 +6,22 @@ PREFIX ?=	/usr/local
 BINDIR ?=	$(PREFIX)/bin
 MANDIR ?=	$(PREFIX)/share/man
 
-all: nanoproxy
+all: thinproxy
 
-nanoproxy: nanoproxy.c
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ nanoproxy.c
+thinproxy: thinproxy.c
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ thinproxy.c
 
-install: nanoproxy
+install: thinproxy
 	install -d $(DESTDIR)$(BINDIR)
-	install -m 755 nanoproxy $(DESTDIR)$(BINDIR)/
+	install -m 755 thinproxy $(DESTDIR)$(BINDIR)/
 	install -d $(DESTDIR)$(MANDIR)/man8
-	install -m 644 nanoproxy.8 $(DESTDIR)$(MANDIR)/man8/
+	install -m 644 thinproxy.8 $(DESTDIR)$(MANDIR)/man8/
 
 uninstall:
-	rm -f $(DESTDIR)$(BINDIR)/nanoproxy
-	rm -f $(DESTDIR)$(MANDIR)/man8/nanoproxy.8
+	rm -f $(DESTDIR)$(BINDIR)/thinproxy
+	rm -f $(DESTDIR)$(MANDIR)/man8/thinproxy.8
 
 clean:
-	rm -f nanoproxy
+	rm -f thinproxy
 
 .PHONY: all install uninstall clean

@@ -1,4 +1,4 @@
-# nanoproxy
+# thinproxy
 
 Lightweight, asynchronous HTTP/HTTPS proxy written in C.
 
@@ -28,7 +28,7 @@ The default prefix is `/usr/local`. Override with:
 
 ## Usage
 
-    nanoproxy [-dVv] [-b address] [-f config] [-p port] [-u user]
+    thinproxy [-dVv] [-b address] [-f config] [-p port] [-u user]
 
 ### Options
 
@@ -36,7 +36,7 @@ The default prefix is `/usr/local`. Override with:
 |------|-------------|
 | `-b address` | Bind address (default: `127.0.0.1`) |
 | `-d` | Daemonize and log to syslog |
-| `-f config` | Configuration file (default: `/etc/nanoproxy.conf`) |
+| `-f config` | Configuration file (default: `/etc/thinproxy.conf`) |
 | `-p port` | Listen port (default: `8080`) |
 | `-u user` | Drop privileges to user after bind |
 | `-V` | Print version and exit |
@@ -48,19 +48,19 @@ CLI flags override configuration file values.
 
 Start with default settings:
 
-    nanoproxy
+    thinproxy
 
 Use a custom configuration file:
 
-    nanoproxy -f /path/to/nanoproxy.conf
+    thinproxy -f /path/to/thinproxy.conf
 
 Listen on all interfaces with verbose logging:
 
-    nanoproxy -v -b 0.0.0.0 -p 3128
+    thinproxy -v -b 0.0.0.0 -p 3128
 
 Run as a daemon with privilege dropping:
 
-    nanoproxy -d -u nobody -p 8080
+    thinproxy -d -u nobody -p 8080
 
 Use with curl:
 
@@ -69,9 +69,9 @@ Use with curl:
 
 ## Configuration
 
-Default path: `/etc/nanoproxy.conf` (silently ignored if missing).
+Default path: `/etc/thinproxy.conf` (silently ignored if missing).
 
-See `nanoproxy.conf.example` for a full example.
+See `thinproxy.conf.example` for a full example.
 
 ### Directives
 

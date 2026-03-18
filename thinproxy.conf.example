@@ -1,4 +1,4 @@
-# nanoproxy configuration file
+# thinproxy configuration file
 # Lines starting with # are comments. Inline comments are supported.
 # CLI flags override values set here.
 
