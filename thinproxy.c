@@ -938,7 +938,12 @@ dns_child(const char *host, const char *port, int wfd)
 {
 	struct addrinfo hints, *res;
 	struct dns_result dr;
-	int err;
+	int err, i;
+
+	for (i = 3; i < MAX_FDS; i++) {
+		if (i != wfd)
+			(void)close(i);
+	}
 
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_UNSPEC;
