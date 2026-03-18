@@ -1337,8 +1337,11 @@ event_loop(int lfd)
 					handle_request(c);
 				break;
 			case S_RESOLVING:
-				if (rev & (POLLIN | POLLHUP))
+				if (fd == c->rfd &&
+				    (rev & (POLLIN | POLLHUP)))
 					handle_resolving(c);
+				else if (fd == c->cfd)
+					conn_close(c);
 				break;
 			case S_CONNECTING:
 				if (rev & (POLLOUT | POLLHUP | POLLERR))
