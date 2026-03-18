@@ -1,0 +1,209 @@
+.Dd March 18, 2026
+.Dt NANOPROXY 8
+.Os
+.Sh NAME
+.Nm nanoproxy
+.Nd lightweight asynchronous HTTP/HTTPS proxy
+.Sh SYNOPSIS
+.Nm
+.Op Fl dVv
+.Op Fl b Ar address
+.Op Fl f Ar config
+.Op Fl p Ar port
+.Op Fl u Ar user
+.Sh DESCRIPTION
+.Nm
+is a minimal, single-threaded HTTP/HTTPS proxy with a small memory
+footprint.
+It uses non-blocking I/O with
+.Xr poll 2
+for asynchronous event handling and supports both HTTP request forwarding
+and HTTPS tunneling via the CONNECT method.
+.Pp
+The options are as follows:
+.Bl -tag -width Ds
+.It Fl b Ar address
+Bind to
+.Ar address .
+The default is
+.Cm 127.0.0.1 .
+Use
+.Cm 0.0.0.0
+to listen on all IPv4 interfaces, or
+.Cm ::
+for all interfaces including IPv6.
+.It Fl d
+Daemonize.
+Run in the background and log to
+.Xr syslog 3
+instead of standard error.
+.It Fl f Ar config
+Read configuration from
+.Ar config
+instead of the default
+.Pa /etc/nanoproxy.conf .
+.It Fl p Ar port
+Listen on
+.Ar port .
+The default is
+.Cm 8080 .
+.It Fl u Ar user
+Drop privileges to
+.Ar user
+after binding the listening socket.
+Recommended when binding to privileged ports.
+.It Fl V
+Print version and exit.
+.It Fl v
+Verbose mode.
+Log each proxied request.
+.El
+.Pp
+Command-line flags override values set in the configuration file.
+.Sh CONFIGURATION FILE
+.Nm
+reads its configuration from
+.Pa /etc/nanoproxy.conf
+by default, or from the file specified with
+.Fl f .
+If the default file does not exist, it is silently ignored.
+If a file specified with
+.Fl f
+does not exist, it is an error.
+.Pp
+The file format is one directive per line.
+Empty lines and lines starting with
+.Sq #
+are ignored.
+Inline comments starting with
+.Sq #
+are also supported.
+.Pp
+The following directives are recognized:
+.Bl -tag -width Ds
+.It Cm listen Ar address
+Equivalent to
+.Fl b .
+.It Cm port Ar number
+Equivalent to
+.Fl p .
+.It Cm user Ar name
+Equivalent to
+.Fl u .
+.It Cm daemon Cm yes | no
+Equivalent to
+.Fl d .
+.It Cm verbose Cm yes | no
+Equivalent to
+.Fl v .
+.It Cm max_connections Ar number
+Maximum concurrent connections.
+Must be between 1 and 512.
+The default is 512.
+.It Cm idle_timeout Ar seconds
+Close connections idle for longer than
+.Ar seconds .
+The default is 300.
+.It Cm allow Ar address Ns Op / Ns Ar prefix
+Allow connections from
+.Ar address .
+The address may be an IPv4 or IPv6 address, optionally followed by a
+CIDR prefix length.
+When any
+.Cm allow
+directive is present,
+all addresses not matching an
+.Cm allow
+rule are denied.
+Cannot be mixed with
+.Cm deny .
+.It Cm deny Ar address Ns Op / Ns Ar prefix
+Deny connections from
+.Ar address .
+When any
+.Cm deny
+directive is present,
+all addresses not matching a
+.Cm deny
+rule are allowed.
+Cannot be mixed with
+.Cm allow .
+.El
+.Sh OPERATION
+For HTTP requests, the proxy rewrites the absolute URI to a relative
+path, strips hop-by-hop headers
+.Pq Proxy-Connection, Proxy-Authorization ,
+forces
+.Cm Connection: close ,
+and forwards the request to the upstream server.
+.Pp
+For HTTPS requests using the CONNECT method, the proxy establishes a
+TCP tunnel to the upstream host and relays data bidirectionally without
+inspecting the encrypted traffic.
+.Sh SECURITY
+.Nm
+binds to localhost by default, preventing external access.
+.Pp
+When started as root with the
+.Fl u
+flag or the
+.Cm user
+directive, privileges are dropped immediately after binding the
+listening socket.
+.Pp
+On
+.Ox ,
+.Xr pledge 2
+is used to restrict system calls to
+.Cm stdio inet dns .
+.Pp
+.Nm
+does not inspect, decrypt, or modify HTTPS traffic.
+TLS connections are tunneled opaquely via CONNECT.
+.Sh EXAMPLES
+Start on the default address and port:
+.Pp
+.Dl $ nanoproxy
+.Pp
+Use a custom configuration file:
+.Pp
+.Dl $ nanoproxy -f /path/to/nanoproxy.conf
+.Pp
+Listen on all interfaces, port 3128, with verbose logging:
+.Pp
+.Dl $ nanoproxy -v -b 0.0.0.0 -p 3128
+.Pp
+Run as a daemon, dropping privileges to the
+.Cm nobody
+user:
+.Pp
+.Dl # nanoproxy -d -u nobody -p 8080
+.Pp
+Use with curl:
+.Pp
+.Dl $ curl -x http://127.0.0.1:8080 http://example.com
+.Dl $ curl -x http://127.0.0.1:8080 https://example.com
+.Pp
+Example configuration file allowing only a local network:
+.Bd -literal -offset indent
+listen 0.0.0.0
+port 3128
+user nobody
+daemon yes
+allow 192.168.1.0/24
+allow 127.0.0.1
+.Ed
+.Sh FILES
+.Bl -tag -width Ds
+.It Pa /etc/nanoproxy.conf
+Default configuration file.
+.El
+.Sh EXIT STATUS
+.Ex -std
+.Sh SEE ALSO
+.Xr curl 1 ,
+.Xr poll 2 ,
+.Xr pledge 2 ,
+.Xr syslog 3
+.Sh AUTHORS
+.An Renaud Allard Aq Mt renaud@allard.it

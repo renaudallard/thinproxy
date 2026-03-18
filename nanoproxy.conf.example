@@ -1,0 +1,37 @@
+# nanoproxy configuration file
+# Lines starting with # are comments. Inline comments are supported.
+# CLI flags override values set here.
+
+# Bind address (default: 127.0.0.1)
+listen 127.0.0.1
+
+# Listen port (default: 8080)
+port 8080
+
+# Drop privileges to this user after binding
+#user nobody
+
+# Run as daemon and log to syslog (default: no)
+#daemon yes
+
+# Verbose logging (default: no)
+#verbose no
+
+# Maximum concurrent connections (default: 512, max: 512)
+#max_connections 512
+
+# Close idle connections after this many seconds (default: 300)
+#idle_timeout 300
+
+# Access control lists
+# Use either "allow" or "deny" directives, not both.
+#
+# Whitelist mode: only listed addresses are permitted (deny rest)
+#allow 127.0.0.1
+#allow 192.168.1.0/24
+#allow 10.0.0.0/8
+#allow ::1
+#
+# Blacklist mode: listed addresses are blocked (allow rest)
+#deny 203.0.113.0/24
+#deny 198.51.100.0/24
