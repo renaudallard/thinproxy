@@ -1,0 +1,89 @@
+name: Build
+
+on:
+  push:
+    branches: ["*"]
+  pull_request:
+
+jobs:
+  build-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu (latest)
+            image: ubuntu:latest
+          - name: Ubuntu (24.04 LTS)
+            image: ubuntu:24.04
+          - name: Debian (stable)
+            image: debian:stable
+          - name: Debian (oldstable)
+            image: debian:oldstable
+          - name: Fedora (latest)
+            image: fedora:latest
+          - name: Rocky Linux 9
+            image: rockylinux:9
+          - name: Alpine (latest)
+            image: alpine:latest
+          - name: openSUSE Leap
+            image: opensuse/leap:latest
+          - name: Arch Linux
+            image: archlinux:latest
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.image }}
+    timeout-minutes: 10
+    steps:
+      - name: Install build tools (apt)
+        if: contains(matrix.image, 'ubuntu') || contains(matrix.image, 'debian')
+        run: |
+          apt-get update
+          apt-get install -y build-essential git
+
+      - name: Install build tools (dnf)
+        if: contains(matrix.image, 'fedora') || contains(matrix.image, 'rockylinux')
+        run: |
+          dnf install -y gcc make git
+
+      - name: Install build tools (apk)
+        if: contains(matrix.image, 'alpine')
+        run: |
+          apk add build-base git
+
+      - name: Install build tools (zypper)
+        if: contains(matrix.image, 'opensuse')
+        run: |
+          zypper install -y gcc make git
+
+      - name: Install build tools (pacman)
+        if: contains(matrix.image, 'archlinux')
+        run: |
+          pacman -Sy --noconfirm gcc make git
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: make -j$(nproc)
+
+      - name: Verify binary
+        run: ./thinproxy -V
+
+  build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-13]
+    name: macOS (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: make -j$(sysctl -n hw.ncpu)
+
+      - name: Verify binary
+        run: ./thinproxy -V
