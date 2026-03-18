@@ -1326,7 +1326,7 @@ event_loop(int lfd)
 			if (c == NULL)
 				continue;
 
-			if (rev & (POLLERR | POLLNVAL)) {
+			if (rev & POLLNVAL) {
 				conn_close(c);
 				continue;
 			}
@@ -1371,6 +1371,9 @@ event_loop(int lfd)
 				}
 				break;
 			}
+
+			if (fdmap[fd] != NULL && (rev & POLLERR))
+				conn_close(fdmap[fd]);
 		}
 
 		{
