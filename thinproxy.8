@@ -180,8 +180,15 @@ listening socket.
 .Pp
 On
 .Ox ,
+.Xr unveil 2
+restricts filesystem access to
+.Pa /etc/resolv.conf
+and
+.Pa /etc/hosts
+(read-only, for DNS resolution in forked children),
+and
 .Xr pledge 2
-is used to restrict system calls to
+restricts system calls to
 .Cm stdio inet dns proc .
 .Pp
 .Nm

@@ -11,7 +11,7 @@ Lightweight, asynchronous HTTP/HTTPS proxy written in C.
 - Small memory footprint (~24 KB per connection)
 - Configuration file with ACL support
 - Privilege dropping after bind
-- OpenBSD pledge(2) support
+- OpenBSD pledge(2) and unveil(2) support
 - Syslog logging in daemon mode
 - IPv4 and IPv6 support
 

@@ -49,7 +49,7 @@
 #include <grp.h>
 
 #ifdef __OpenBSD__
-#include <unistd.h>
+#include <unistd.h>	/* pledge, unveil */
 #endif
 
 #define THINPROXY_VERSION	"0.0.1"
@@ -1749,6 +1749,13 @@ main(int argc, char *argv[])
 	}
 
 #ifdef __OpenBSD__
+	if (unveil("/etc/resolv.conf", "r") == -1 ||
+	    unveil("/etc/hosts", "r") == -1 ||
+	    unveil(NULL, NULL) == -1) {
+		logmsg(LOG_ERR, "unveil: %s", strerror(errno));
+		close(lfd);
+		return 1;
+	}
 	if (pledge("stdio inet dns proc", NULL) == -1) {
 		logmsg(LOG_ERR, "pledge: %s", strerror(errno));
 		close(lfd);
