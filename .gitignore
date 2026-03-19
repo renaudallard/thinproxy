@@ -1,7 +1,7 @@
-thinproxy
+/thinproxy
 *.o
-fuzz_request
-fuzz_config
+/fuzz_request
+/fuzz_config
 debian/debhelper-build-stamp
 debian/files
 debian/*.debhelper
