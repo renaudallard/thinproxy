@@ -1478,6 +1478,19 @@ accept_conn(int lfd)
 	(void)setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
 	set_nodelay(fd);
 
+	/*
+	 * Force RST on close so the kernel releases the PCB
+	 * immediately.  Without this, client sockets linger in
+	 * FIN_WAIT_2 after process exit and block bind() on
+	 * restart.  Set at accept time so it takes effect even
+	 * if the process is killed with SIGKILL.
+	 */
+	{
+		struct linger lg = { 1, 0 };
+		(void)setsockopt(fd, SOL_SOCKET, SO_LINGER,
+		    &lg, sizeof(lg));
+	}
+
 	c = conn_alloc(fd);
 	if (c == NULL) {
 		ign_write(fd, ERR_503, sizeof(ERR_503) - 1);
@@ -1858,20 +1871,8 @@ main(int argc, char *argv[])
 
 	logmsg(LOG_INFO, "shutting down");
 	for (i = 0; i < MAX_FDS; i++) {
-		if (fdmap[i] != NULL && fdtype_arr[i] == FD_CLIENT) {
-			struct linger lg = { 1, 0 };
-			struct conn *c = fdmap[i];
-			/*
-			 * Force RST on client sockets so the kernel
-			 * releases the PCB immediately.  Without this,
-			 * connections in FIN_WAIT_2 hold the listen
-			 * address and block bind() on restart.
-			 */
-			if (c->cfd >= 0)
-				(void)setsockopt(c->cfd, SOL_SOCKET,
-				    SO_LINGER, &lg, sizeof(lg));
-			conn_close(c);
-		}
+		if (fdmap[i] != NULL && fdtype_arr[i] == FD_CLIENT)
+			conn_close(fdmap[i]);
 	}
 	close(lfd);
 
