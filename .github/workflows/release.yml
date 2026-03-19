@@ -1,0 +1,99 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            image: debian:stable
+            cc: cc
+            suffix: linux-amd64
+          - arch: arm64
+            image: debian:stable
+            cc: cc
+            suffix: linux-arm64
+          - arch: amd64
+            image: alpine:latest
+            cc: cc
+            suffix: linux-amd64-musl
+    name: ${{ matrix.suffix }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Install tools (apt)
+        if: contains(matrix.image, 'debian')
+        run: apt-get update && apt-get install -y build-essential git file
+
+      - name: Install tools (apk)
+        if: contains(matrix.image, 'alpine')
+        run: apk add build-base git file
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build
+        run: |
+          make CC="${{ matrix.cc }}" CFLAGS="-O2 -pipe -Wall -Wextra -Werror -pedantic -std=c99 -static" LDFLAGS="-static"
+          file thinproxy
+          ./thinproxy -V
+
+      - name: Package
+        run: |
+          tar czf thinproxy-${{ github.ref_name }}-${{ matrix.suffix }}.tar.gz \
+            thinproxy thinproxy.8 thinproxy.conf.example thinproxy.service \
+            LICENSE README.md
+
+      - name: Upload asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            thinproxy-${{ github.ref_name }}-${{ matrix.suffix }}.tar.gz \
+            --repo "${{ github.repository }}" \
+            --clobber
+
+  build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            suffix: macos-arm64
+          - os: macos-26
+            suffix: macos-arm64-26
+    name: ${{ matrix.suffix }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build
+        run: |
+          make
+          file thinproxy
+          ./thinproxy -V
+
+      - name: Package
+        run: |
+          tar czf thinproxy-${{ github.ref_name }}-${{ matrix.suffix }}.tar.gz \
+            thinproxy thinproxy.8 thinproxy.conf.example \
+            LICENSE README.md
+
+      - name: Upload asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            thinproxy-${{ github.ref_name }}-${{ matrix.suffix }}.tar.gz \
+            --repo "${{ github.repository }}" \
+            --clobber
