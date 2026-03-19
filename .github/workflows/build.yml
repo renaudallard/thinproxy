@@ -75,7 +75,6 @@ jobs:
     name: Tag on version change
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
-    needs: [build-linux, build-macos]
     permissions:
       contents: write
     steps:
