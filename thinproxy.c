@@ -344,7 +344,7 @@ acl_add(const char *cidr)
 	slash = strchr(buf, '/');
 	if (slash != NULL) {
 		*slash++ = '\0';
-		e->prefixlen = atoi(slash);
+		e->prefixlen = (int)strtol(slash, NULL, 10);
 	} else {
 		e->prefixlen = -1;
 	}
@@ -453,7 +453,7 @@ connect_port_allowed(const char *port)
 	if (nconnect_ports == 0)
 		return 1;
 
-	p = atoi(port);
+	p = (int)strtol(port, NULL, 10);
 	for (i = 0; i < nconnect_ports; i++) {
 		if (connect_ports[i] == p)
 			return 1;
@@ -679,7 +679,7 @@ parse_config(const char *path, int must_exist)
 			}
 			vflag = b;
 		} else if (strcasecmp(key, "max_connections") == 0) {
-			int n = atoi(val);
+			int n = (int)strtol(val, NULL, 10);
 			if (n <= 0 || n > MAX_CONNS) {
 				logmsg(LOG_ERR,
 				    "%s:%d: max_connections: 1-%d",
@@ -689,7 +689,7 @@ parse_config(const char *path, int must_exist)
 			}
 			cfg_maxconns = n;
 		} else if (strcasecmp(key, "idle_timeout") == 0) {
-			int n = atoi(val);
+			int n = (int)strtol(val, NULL, 10);
 			if (n <= 0 || n > 86400) {
 				logmsg(LOG_ERR,
 				    "%s:%d: idle_timeout: 1-86400",
@@ -725,7 +725,7 @@ parse_config(const char *path, int must_exist)
 				return -1;
 			}
 		} else if (strcasecmp(key, "max_connections_per_ip") == 0) {
-			int n = atoi(val);
+			int n = (int)strtol(val, NULL, 10);
 			if (n <= 0 || n > MAX_CONNS) {
 				logmsg(LOG_ERR,
 				    "%s:%d: max_connections_per_ip: 1-%d",
@@ -743,7 +743,7 @@ parse_config(const char *path, int must_exist)
 			cfg_deny_private = b;
 		} else if (strcasecmp(key, "connect_port") == 0) {
 			static int connect_port_seen;
-			int n = atoi(val);
+			int n = (int)strtol(val, NULL, 10);
 			if (n <= 0 || n > 65535) {
 				logmsg(LOG_ERR,
 				    "%s:%d: invalid port: %s",
