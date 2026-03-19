@@ -1,8 +1,7 @@
 #!/bin/ksh
 
 daemon="/usr/local/bin/thinproxy"
-daemon_flags="-d"
-daemon_user="_thinproxy"
+daemon_flags="-d -u _thinproxy"
 
 . /etc/rc.d/rc.subr
 
