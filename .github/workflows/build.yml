@@ -74,7 +74,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, macos-14]
+        os: [macos-latest, macos-26]
     name: macOS (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
