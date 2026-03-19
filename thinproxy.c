@@ -684,9 +684,9 @@ parse_config(const char *path, int must_exist)
 			cfg_maxconns = n;
 		} else if (strcasecmp(key, "idle_timeout") == 0) {
 			int n = atoi(val);
-			if (n <= 0) {
+			if (n <= 0 || n > 86400) {
 				logmsg(LOG_ERR,
-				    "%s:%d: invalid idle_timeout",
+				    "%s:%d: idle_timeout: 1-86400",
 				    path, lineno);
 				fclose(fp);
 				return -1;
