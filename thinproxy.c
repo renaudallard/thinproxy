@@ -1651,8 +1651,10 @@ setup_listener(const char *addr, const char *port)
 
 	for (r = res; r != NULL; r = r->ai_next) {
 		fd = socket(r->ai_family, r->ai_socktype, r->ai_protocol);
-		if (fd == -1)
+		if (fd == -1) {
+			err = errno;
 			continue;
+		}
 		on = 1;
 		(void)setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
 		    &on, sizeof(on));
