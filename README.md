@@ -41,6 +41,13 @@ The default prefix is `/usr/local`. Override with:
 make install PREFIX=/usr DESTDIR=/tmp/pkg
 ```
 
+A systemd unit file is installed to `/lib/systemd/system/`. To enable:
+
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now thinproxy
+```
+
 ## Usage
 
 ```
