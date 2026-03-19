@@ -118,7 +118,10 @@ shared address space (100.64/10), unique local IPv6 (fc00::/7),
 multicast, and reserved ranges.
 IPv4-mapped IPv6 addresses are also checked.
 The default is
-.Cm no .
+.Cm yes .
+Set to
+.Cm no
+to allow connections to private addresses.
 .It Cm connect_port Ar port
 Restrict the CONNECT method to the specified
 .Ar port .
