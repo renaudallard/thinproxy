@@ -70,6 +70,34 @@ jobs:
       - name: Verify binary
         run: ./thinproxy -V
 
+  tag-release:
+    name: Tag on version change
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    needs: [build-linux, build-macos]
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Create tag if version changed
+        run: |
+          ver=$(sed -n 's/^#define THINPROXY_VERSION.*"\(.*\)"/\1/p' thinproxy.c)
+          if [ -z "$ver" ]; then
+            echo "Could not extract version"
+            exit 1
+          fi
+          if git rev-parse "v${ver}" >/dev/null 2>&1; then
+            echo "Tag v${ver} already exists, skipping"
+          else
+            echo "Creating tag v${ver}"
+            git tag "v${ver}"
+            git push origin "v${ver}"
+          fi
+
   build-macos:
     strategy:
       fail-fast: false
