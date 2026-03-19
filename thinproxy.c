@@ -1004,6 +1004,7 @@ dns_child(const char *host, const char *port, int wfd)
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags = AI_ADDRCONFIG;
 
 	memset(&dr, 0, sizeof(dr));
 	err = getaddrinfo(host, port, &hints, &res);
