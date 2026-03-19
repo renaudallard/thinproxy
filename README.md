@@ -81,7 +81,7 @@ thinproxy -f /path/to/thinproxy.conf
 thinproxy -v -b 0.0.0.0 -p 3128
 
 # Run as a daemon with privilege dropping
-thinproxy -d -u nobody -p 8080
+thinproxy -d -u _thinproxy -p 8080
 
 # Use with curl
 curl -x http://127.0.0.1:8080 http://example.com
@@ -142,7 +142,7 @@ allow ::1
 ```
 listen 0.0.0.0
 port 3128
-user nobody
+user _thinproxy
 daemon yes
 deny_private yes
 connect_port 443

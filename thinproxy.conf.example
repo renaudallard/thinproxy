@@ -9,7 +9,7 @@ listen 127.0.0.1
 port 8080
 
 # Drop privileges to this user after binding
-#user nobody
+#user _thinproxy
 
 # Run as daemon and log to syslog (default: no)
 #daemon yes

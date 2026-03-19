@@ -208,10 +208,10 @@ Listen on all interfaces, port 3128, with verbose logging:
 .Dl $ thinproxy -v -b 0.0.0.0 -p 3128
 .Pp
 Run as a daemon, dropping privileges to the
-.Cm nobody
+.Cm _thinproxy
 user:
 .Pp
-.Dl # thinproxy -d -u nobody -p 8080
+.Dl # thinproxy -d -u _thinproxy -p 8080
 .Pp
 Use with curl:
 .Pp
@@ -222,7 +222,7 @@ Example configuration file allowing only a local network:
 .Bd -literal -offset indent
 listen 0.0.0.0
 port 3128
-user nobody
+user _thinproxy
 daemon yes
 allow 192.168.1.0/24
 allow 127.0.0.1
