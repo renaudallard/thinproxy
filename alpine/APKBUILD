@@ -18,5 +18,6 @@ check() {
 }
 
 package() {
-	make install DESTDIR="$pkgdir" PREFIX=/usr UNITDIR=/lib/systemd/system
+	make install DESTDIR="$pkgdir" PREFIX=/usr UNITDIR=/usr/lib/systemd/system
+	gzip "$pkgdir"/usr/share/man/man8/thinproxy.8
 }

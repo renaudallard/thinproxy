@@ -20,10 +20,6 @@ env:
   DEBIAN_FRONTEND: noninteractive
   RPMBUILD_TOPDIR: /tmp/rpmbuild
 
-defaults:
-  run:
-    shell: bash
-
 jobs:
   detect-versions:
     name: Detect distro versions
