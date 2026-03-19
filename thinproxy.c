@@ -1535,7 +1535,11 @@ accept_conn(int lfd)
 	struct conn *c;
 
 	sl = sizeof(ss);
+#ifdef SOCK_NONBLOCK
+	fd = accept4(lfd, (struct sockaddr *)&ss, &sl, SOCK_NONBLOCK);
+#else
 	fd = accept(lfd, (struct sockaddr *)&ss, &sl);
+#endif
 	if (fd == -1) {
 		if (errno == EMFILE || errno == ENFILE) {
 			logmsg(LOG_ERR, "accept: %s", strerror(errno));
@@ -1567,10 +1571,12 @@ accept_conn(int lfd)
 		return;
 	}
 
+#ifndef SOCK_NONBLOCK
 	if (set_nonblock(fd) == -1) {
 		close(fd);
 		return;
 	}
+#endif
 
 	on = 1;
 	(void)setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
