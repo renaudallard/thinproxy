@@ -1,3 +1,9 @@
+thinproxy (0.0.6-1) unstable; urgency=low
+
+  * Force RST on client sockets during shutdown to avoid FIN_WAIT_2.
+
+ -- Renaud Allard <renaud@allard.it>  Thu, 19 Mar 2026 00:00:00 +0000
+
 thinproxy (0.0.5-1) unstable; urgency=low
 
   * Save errno on socket failure in setup_listener.
