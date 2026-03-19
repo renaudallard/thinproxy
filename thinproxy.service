@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/thinproxy -f /etc/thinproxy.conf
+ExecStart=/usr/local/bin/thinproxy
 Restart=on-failure
 RestartSec=5
 
@@ -17,7 +17,6 @@ PrivateDevices=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
-ReadOnlyPaths=/etc/thinproxy.conf
 RestrictNamespaces=yes
 RestrictSUIDSGID=yes
 MemoryDenyWriteExecute=yes
