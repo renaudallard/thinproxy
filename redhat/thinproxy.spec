@@ -1,5 +1,5 @@
 Name:           thinproxy
-Version:        0.0.9
+Version:        0.0.10
 Release:        1%{?dist}
 Summary:        Lightweight asynchronous HTTP/HTTPS proxy
 License:        BSD-2-Clause
