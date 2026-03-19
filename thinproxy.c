@@ -1656,6 +1656,10 @@ setup_listener(const char *addr, const char *port)
 		on = 1;
 		(void)setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
 		    &on, sizeof(on));
+#ifdef SO_REUSEPORT
+		(void)setsockopt(fd, SOL_SOCKET, SO_REUSEPORT,
+		    &on, sizeof(on));
+#endif
 		if (bind(fd, r->ai_addr, r->ai_addrlen) == -1) {
 			err = errno;
 			close(fd);
