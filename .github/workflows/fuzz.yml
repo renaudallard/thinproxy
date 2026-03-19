@@ -13,7 +13,7 @@ jobs:
         target: [fuzz_request, fuzz_config]
     name: ${{ matrix.target }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 240
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -42,7 +42,7 @@ jobs:
           corpus="fuzz/corpus_$(echo "${{ matrix.target }}" | sed 's/^fuzz_//')"
           mkdir -p "$corpus"
           ./${{ matrix.target }} "$corpus" \
-            -max_total_time=600 \
+            -max_total_time=13500 \
             -max_len=8192 \
             -print_final_stats=1
 
