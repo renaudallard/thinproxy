@@ -1856,11 +1856,15 @@ main(int argc, char *argv[])
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = sig_handler;
 	sigemptyset(&sa.sa_mask);
-	sigaction(SIGTERM, &sa, NULL);
-	sigaction(SIGINT, &sa, NULL);
+	if (sigaction(SIGTERM, &sa, NULL) == -1 ||
+	    sigaction(SIGINT, &sa, NULL) == -1) {
+		logmsg(LOG_ERR, "sigaction: %s", strerror(errno));
+		close(lfd);
+		return 1;
+	}
 	sa.sa_handler = SIG_IGN;
-	sigaction(SIGPIPE, &sa, NULL);
-	sigaction(SIGCHLD, &sa, NULL);
+	(void)sigaction(SIGPIPE, &sa, NULL);
+	(void)sigaction(SIGCHLD, &sa, NULL);
 
 	if (poll_add(lfd, POLLIN, NULL, FD_LISTEN) == -1) {
 		logmsg(LOG_ERR, "poll_add failed");
