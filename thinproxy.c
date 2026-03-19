@@ -1298,8 +1298,8 @@ conn_update_poll(struct conn *c)
 	if (c->state != S_RELAY)
 		return;
 
-	if ((c->ceof && c->c2s_len == 0) ||
-	    (c->seof && c->s2c_len == 0)) {
+	if (c->ceof && c->c2s_len == 0 &&
+	    c->seof && c->s2c_len == 0) {
 		conn_close(c);
 		return;
 	}
