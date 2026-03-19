@@ -1730,8 +1730,10 @@ drop_privs(const char *user)
 		logmsg(LOG_ERR, "unknown user: %s", user);
 		return -1;
 	}
-	if (getuid() == pw->pw_uid)
+	if (getuid() == pw->pw_uid) {
+		(void)setgid(pw->pw_gid);
 		return 0;
+	}
 	if (setgroups(1, &pw->pw_gid) == -1 ||
 	    setgid(pw->pw_gid) == -1 ||
 	    setuid(pw->pw_uid) == -1) {
