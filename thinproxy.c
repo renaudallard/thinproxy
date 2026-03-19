@@ -461,31 +461,57 @@ connect_port_allowed(const char *port)
 	return 0;
 }
 
+/*
+ * Extract IPv4 address from sockaddr, handling IPv4-mapped IPv6.
+ * Returns 1 and fills *out if IPv4 (native or mapped), 0 otherwise.
+ */
+static int
+extract_v4(struct sockaddr *sa, struct in_addr *out)
+{
+	if (sa->sa_family == AF_INET) {
+		*out = ((struct sockaddr_in *)sa)->sin_addr;
+		return 1;
+	}
+	if (sa->sa_family == AF_INET6) {
+		struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)sa;
+		if (IN6_IS_ADDR_V4MAPPED(&sin6->sin6_addr)) {
+			memcpy(out, sin6->sin6_addr.s6_addr + 12, 4);
+			return 1;
+		}
+	}
+	return 0;
+}
+
 static int
 per_ip_check(struct sockaddr *sa)
 {
 	int fd, count;
+	struct in_addr new_v4;
+	int new_is_v4;
 
 	if (cfg_maxconns_per_ip <= 0)
 		return 1;
 
+	new_is_v4 = extract_v4(sa, &new_v4);
+
 	count = 0;
 	for (fd = 0; fd < MAX_FDS; fd++) {
 		struct conn *c = fdmap[fd];
+		struct in_addr peer_v4;
 		if (c == NULL || fdtype_arr[fd] != FD_CLIENT)
 			continue;
 		if (c->cfd != fd)
 			continue;
-		if (c->peer.ss_family != sa->sa_family)
-			continue;
-		if (sa->sa_family == AF_INET) {
-			struct sockaddr_in *a = (struct sockaddr_in *)sa;
-			struct sockaddr_in *b = (struct sockaddr_in *)&c->peer;
-			if (a->sin_addr.s_addr == b->sin_addr.s_addr)
+		if (new_is_v4) {
+			if (extract_v4((struct sockaddr *)&c->peer,
+			    &peer_v4) &&
+			    new_v4.s_addr == peer_v4.s_addr)
 				count++;
-		} else if (sa->sa_family == AF_INET6) {
+		} else if (sa->sa_family == AF_INET6 &&
+		    c->peer.ss_family == AF_INET6) {
 			struct sockaddr_in6 *a = (struct sockaddr_in6 *)sa;
-			struct sockaddr_in6 *b = (struct sockaddr_in6 *)&c->peer;
+			struct sockaddr_in6 *b =
+			    (struct sockaddr_in6 *)&c->peer;
 			if (memcmp(&a->sin6_addr, &b->sin6_addr, 16) == 0)
 				count++;
 		}
