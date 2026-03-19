@@ -8,7 +8,9 @@ Lightweight, asynchronous HTTP/HTTPS proxy written in C.
 - HTTPS tunneling via CONNECT method
 - Single-threaded, non-blocking I/O using poll(2)
 - Asynchronous DNS resolution via forked processes
-- Small memory footprint (~24 KB per connection)
+- Small memory footprint (~25 KB per connection)
+- CONNECT port whitelist and private address blocking (SSRF protection)
+- Per-IP connection limits
 - Configuration file with ACL support
 - Privilege dropping after bind
 - OpenBSD pledge(2) and unveil(2) support
