@@ -1,0 +1,15 @@
+Source: thinproxy
+Section: net
+Priority: optional
+Maintainer: Renaud Allard <renaud@allard.it>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: thinproxy
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Lightweight asynchronous HTTP/HTTPS proxy
+ thinproxy is a minimal, single-threaded HTTP/HTTPS proxy with a small
+ memory footprint. It uses non-blocking I/O with poll(2) for asynchronous
+ event handling and supports both HTTP request forwarding and HTTPS
+ tunneling via the CONNECT method.

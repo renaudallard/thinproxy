@@ -3,29 +3,169 @@ name: Release
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag) to build from"
+        required: true
+        default: master
+      release_tag:
+        description: "Existing release tag to attach assets to"
+        required: true
 
 permissions:
   contents: write
 
+env:
+  DEBIAN_FRONTEND: noninteractive
+  RPMBUILD_TOPDIR: /tmp/rpmbuild
+
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  build-linux:
+  detect-versions:
+    name: Detect distro versions
+    runs-on: ubuntu-latest
+    outputs:
+      ubuntu_stable: ${{ steps.detect.outputs.ubuntu_stable }}
+      ubuntu_lts: ${{ steps.detect.outputs.ubuntu_lts }}
+      debian_stable: ${{ steps.detect.outputs.debian_stable }}
+      debian_oldstable: ${{ steps.detect.outputs.debian_oldstable }}
+      fedora_release: ${{ steps.detect.outputs.fedora_release }}
+      rocky_latest: ${{ steps.detect.outputs.rocky_latest }}
+      rocky_container_latest: ${{ steps.detect.outputs.rocky_container_latest }}
+      alpine_latest: ${{ steps.detect.outputs.alpine_latest }}
+      version: ${{ steps.detect.outputs.version }}
+    steps:
+      - name: Detect versions
+        id: detect
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, urllib.request, json, re
+
+          def fetch(url):
+              with urllib.request.urlopen(url, timeout=10) as r:
+                  return r.read().decode()
+
+          def ubuntu_lts():
+              try:
+                  data = fetch("https://changelogs.ubuntu.com/meta-release-lts")
+                  vers = []
+                  block = {}
+                  for line in data.splitlines() + [""]:
+                      if not line.strip():
+                          if block.get("Supported") == "1" and block.get("Lts") == "1" and "Version" in block:
+                              vers.append(block["Version"])
+                          block = {}
+                          continue
+                      if ":" in line:
+                          k, v = line.split(":", 1)
+                          block[k.strip()] = v.strip()
+                  return vers[-1] if vers else "24.04"
+              except Exception:
+                  return "24.04"
+
+          def ubuntu_stable():
+              try:
+                  data = fetch("https://changelogs.ubuntu.com/meta-release")
+                  vers = []
+                  block = {}
+                  for line in data.splitlines() + [""]:
+                      if not line.strip():
+                          if block.get("Supported") == "1" and "Version" in block:
+                              vers.append(block["Version"])
+                          block = {}
+                          continue
+                      if ":" in line:
+                          k, v = line.split(":", 1)
+                          block[k.strip()] = v.strip()
+                  return vers[-1] if vers else "latest"
+              except Exception:
+                  return "latest"
+
+          def debian_codename(track):
+              try:
+                  data = fetch(f"https://deb.debian.org/debian/dists/{track}/Release")
+                  for line in data.splitlines():
+                      if line.startswith("Codename:"):
+                          return line.split(":", 1)[1].strip()
+              except Exception:
+                  pass
+              return track
+
+          def fedora():
+              try:
+                  data = fetch("https://getfedora.org/releases.json")
+                  vers = [int(e["version"]) for e in json.loads(data).get("fedora", [])
+                          if e.get("edition") == "Everything" and e.get("status") == "Active"
+                          and e.get("version") is not None]
+                  return str(max(vers)) if vers else "41"
+              except Exception:
+                  return "41"
+
+          def rocky():
+              try:
+                  html = fetch("https://dl.rockylinux.org/pub/rocky/")
+                  vers = sorted({m.group(1) for m in re.finditer(r'href="([0-9]+)/"', html)}, key=int)
+                  return vers[-1] if vers else "9"
+              except Exception:
+                  return "9"
+
+          def rocky_tag(major):
+              try:
+                  data = fetch("https://quay.io/api/v1/repository/rockylinux/rockylinux/tag/?limit=100")
+                  tags = {t["name"] for t in json.loads(data).get("tags", [])}
+                  for c in [major, f"{major}.0", f"{major}.1"]:
+                      if c in tags:
+                          return c
+              except Exception:
+                  pass
+              return major
+
+          def alpine():
+              try:
+                  data = fetch("https://hub.docker.com/v2/repositories/library/alpine/tags?page_size=100")
+                  vers = sorted([t["name"] for t in json.loads(data).get("results", [])
+                                 if re.match(r"^\d+\.\d+$", t["name"])],
+                                key=lambda v: [int(x) for x in v.split(".")])
+                  return vers[-1] if vers else "latest"
+              except Exception:
+                  return "latest"
+
+          tag = os.environ.get("GITHUB_REF_NAME", "v0.0.1")
+          version = tag.lstrip("v")
+
+          rl = rocky()
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"ubuntu_stable={ubuntu_stable()}\n")
+              f.write(f"ubuntu_lts={ubuntu_lts()}\n")
+              f.write(f"debian_stable={debian_codename('stable')}\n")
+              f.write(f"debian_oldstable={debian_codename('oldstable')}\n")
+              f.write(f"fedora_release={fedora()}\n")
+              f.write(f"rocky_latest={rl}\n")
+              f.write(f"rocky_container_latest={rocky_tag(rl)}\n")
+              f.write(f"alpine_latest={alpine()}\n")
+              f.write(f"version={version}\n")
+          PY
+
+  build-generic:
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: amd64
             image: debian:stable
-            cc: cc
             suffix: linux-amd64
           - arch: arm64
             image: debian:stable
-            cc: cc
             suffix: linux-arm64
           - arch: amd64
             image: alpine:latest
-            cc: cc
             suffix: linux-amd64-musl
-    name: ${{ matrix.suffix }}
+    name: generic-${{ matrix.suffix }}
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     container:
       image: ${{ matrix.image }}
@@ -39,8 +179,7 @@ jobs:
             -o /usr/share/keyrings/githubcli-archive-keyring.gpg
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
             > /etc/apt/sources.list.d/github-cli.list
-          apt-get update
-          apt-get install -y gh
+          apt-get update && apt-get install -y gh
 
       - name: Install tools (apk)
         if: contains(matrix.image, 'alpine')
@@ -48,60 +187,224 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
 
-      - name: Build
+      - name: Build static binary
         run: |
-          make CC="${{ matrix.cc }}" CFLAGS="-O2 -pipe -Wall -Wextra -Werror -pedantic -std=c99 -static" LDFLAGS="-static"
-          file thinproxy
-          ./thinproxy -V
+          make CC=cc CFLAGS="-O2 -pipe -Wall -Wextra -Werror -pedantic -std=c99 -static" LDFLAGS="-static"
+          file thinproxy && ./thinproxy -V
 
-      - name: Package
-        run: |
-          tar czf thinproxy-${{ github.ref_name }}-${{ matrix.suffix }}.tar.gz \
-            thinproxy thinproxy.8 thinproxy.conf.example thinproxy.service \
-            LICENSE README.md
-
-      - name: Upload asset
+      - name: Package and upload
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.ref_name }}" \
-            thinproxy-${{ github.ref_name }}-${{ matrix.suffix }}.tar.gz \
-            --repo "${{ github.repository }}" \
-            --clobber
+          tag="${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.event.release.tag_name }}"
+          tar czf "thinproxy-${tag}-${{ matrix.suffix }}.tar.gz" \
+            thinproxy thinproxy.8 thinproxy.conf.example thinproxy.service LICENSE README.md
+          gh release upload "$tag" "thinproxy-${tag}-${{ matrix.suffix }}.tar.gz" \
+            --repo "${{ github.repository }}" --clobber
 
   build-macos:
+    name: generic-macos-arm64
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+
+      - name: Build and upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          make && ./thinproxy -V
+          tag="${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.event.release.tag_name }}"
+          tar czf "thinproxy-${tag}-macos-arm64.tar.gz" \
+            thinproxy thinproxy.8 thinproxy.conf.example LICENSE README.md
+          gh release upload "$tag" "thinproxy-${tag}-macos-arm64.tar.gz" \
+            --repo "${{ github.repository }}" --clobber
+
+  build-deb:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
-            suffix: macos-arm64
-          - os: macos-26
-            suffix: macos-arm64-26
-    name: ${{ matrix.suffix }}
-    runs-on: ${{ matrix.os }}
+          - distro: ubuntu
+            track: stable
+            version_key: ubuntu_stable
+          - distro: ubuntu
+            track: lts
+            version_key: ubuntu_lts
+          - distro: debian
+            track: stable
+            version_key: debian_stable
+          - distro: debian
+            track: oldstable
+            version_key: debian_oldstable
+    name: deb-${{ matrix.distro }}-${{ matrix.track }}
+    runs-on: ubuntu-latest
+    needs: detect-versions
+    container:
+      image: ${{ matrix.distro }}:${{ needs.detect-versions.outputs[matrix.version_key] }}
     steps:
+      - name: Install build tools
+        run: |
+          apt-get update
+          apt-get install -y build-essential debhelper fakeroot dpkg-dev git curl
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+            -o /usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+            > /etc/apt/sources.list.d/github-cli.list
+          apt-get update && apt-get install -y gh
+
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
 
-      - name: Build
+      - name: Build deb package
         run: |
-          make
-          file thinproxy
-          ./thinproxy -V
+          ver="${{ needs.detect-versions.outputs.version }}"
+          distro_ver="${{ needs.detect-versions.outputs[matrix.version_key] }}"
+          sed -i "1s/([^)]*)/($ver~${{ matrix.distro }}${distro_ver}-1)/" debian/changelog
+          dpkg-buildpackage -us -uc -b -j"$(nproc)"
 
-      - name: Package
-        run: |
-          tar czf thinproxy-${{ github.ref_name }}-${{ matrix.suffix }}.tar.gz \
-            thinproxy thinproxy.8 thinproxy.conf.example \
-            LICENSE README.md
-
-      - name: Upload asset
+      - name: Upload deb
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.ref_name }}" \
-            thinproxy-${{ github.ref_name }}-${{ matrix.suffix }}.tar.gz \
-            --repo "${{ github.repository }}" \
-            --clobber
+          tag="${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.event.release.tag_name }}"
+          for deb in ../*.deb; do
+            name=$(dpkg-deb -f "$deb" Package)
+            ver=$(dpkg-deb -f "$deb" Version)
+            arch=$(dpkg-deb -f "$deb" Architecture)
+            asset="${name}_${ver}_${arch}.deb"
+            cp "$deb" "$asset"
+            gh release upload "$tag" "$asset" --repo "${{ github.repository }}" --clobber
+          done
+
+  build-rpm:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: fedora
+            image_key: fedora_release
+            image_prefix: "fedora:"
+            pkg_cmd: dnf
+          - distro: rocky
+            image_key: rocky_container_latest
+            image_prefix: "quay.io/rockylinux/rockylinux:"
+            pkg_cmd: dnf
+    name: rpm-${{ matrix.distro }}
+    runs-on: ubuntu-latest
+    needs: detect-versions
+    container:
+      image: ${{ matrix.image_prefix }}${{ needs.detect-versions.outputs[matrix.image_key] }}
+    steps:
+      - name: Install build tools
+        run: |
+          ${{ matrix.pkg_cmd }} install -y git rpm-build make gcc tar which
+          if [ "${{ matrix.distro }}" = "rocky" ]; then
+            ${{ matrix.pkg_cmd }} install -y epel-release
+            ${{ matrix.pkg_cmd }} install -y gh || true
+          fi
+          ${{ matrix.pkg_cmd }} install -y gh || true
+
+      - name: Install gh fallback
+        run: |
+          if ! command -v gh >/dev/null 2>&1; then
+            curl -fsSL https://github.com/cli/cli/releases/latest/download/gh_2.74.0_linux_amd64.tar.gz | tar xz
+            cp gh_*/bin/gh /usr/local/bin/
+          fi
+
+      - name: Mark workspace safe
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+
+      - name: Build RPM
+        run: |
+          ver="${{ needs.detect-versions.outputs.version }}"
+          distro_ver="${{ needs.detect-versions.outputs[matrix.image_key] }}"
+          mkdir -p "$RPMBUILD_TOPDIR"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+          tar czf "$RPMBUILD_TOPDIR/SOURCES/thinproxy-${ver}.tar.gz" \
+            --transform "s,^,thinproxy-${ver}/," \
+            thinproxy.c Makefile thinproxy.8 thinproxy.conf.example thinproxy.service LICENSE README.md
+          sed "s/^Version:.*/Version: ${ver}/" redhat/thinproxy.spec > "$RPMBUILD_TOPDIR/SPECS/thinproxy.spec"
+          rpmbuild --define "_topdir $RPMBUILD_TOPDIR" -bb "$RPMBUILD_TOPDIR/SPECS/thinproxy.spec"
+
+      - name: Upload RPM
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.event.release.tag_name }}"
+          distro_ver="${{ needs.detect-versions.outputs[matrix.image_key] }}"
+          find "$RPMBUILD_TOPDIR/RPMS" -name '*.rpm' | while read -r rpm; do
+            base=$(basename "$rpm" .rpm)
+            asset="${base}.${{ matrix.distro }}${distro_ver}.rpm"
+            cp "$rpm" "$asset"
+            gh release upload "$tag" "$asset" --repo "${{ github.repository }}" --clobber
+          done
+
+  build-apk:
+    name: apk-alpine
+    runs-on: ubuntu-latest
+    needs: detect-versions
+    container:
+      image: alpine:${{ needs.detect-versions.outputs.alpine_latest }}
+    defaults:
+      run:
+        shell: sh
+    steps:
+      - name: Install tools
+        run: apk add --no-cache git build-base abuild tar sudo github-cli
+
+      - name: Mark workspace safe
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+
+      - name: Build APK
+        run: |
+          ver="${{ needs.detect-versions.outputs.version }}"
+          tar czf "/tmp/thinproxy-${ver}.tar.gz" \
+            --transform "s,^,thinproxy-${ver}/," \
+            thinproxy.c Makefile thinproxy.8 thinproxy.conf.example thinproxy.service LICENSE README.md
+
+          adduser -D builder
+          addgroup builder abuild
+          mkdir -p /var/cache/distfiles
+          chmod a+w /var/cache/distfiles
+          sudo -u builder abuild-keygen -a -n
+          cp /home/builder/.abuild/*.rsa.pub /etc/apk/keys/
+
+          BUILD_DIR="/home/builder/aport"
+          mkdir -p "$BUILD_DIR"
+          cp alpine/APKBUILD "$BUILD_DIR/"
+          cp "/tmp/thinproxy-${ver}.tar.gz" "$BUILD_DIR/"
+          sed -i "s/^pkgver=.*/pkgver=${ver}/" "$BUILD_DIR/APKBUILD"
+          chown -R builder:builder "$BUILD_DIR"
+          cd "$BUILD_DIR"
+          sudo -u builder abuild checksum
+          sudo -u builder abuild -r
+
+      - name: Upload APK
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.event.release.tag_name }}"
+          alpine_ver="${{ needs.detect-versions.outputs.alpine_latest }}"
+          find /home/builder/packages -name '*.apk' | while read -r apk; do
+            base=$(basename "$apk" .apk)
+            asset="${base}.alpine${alpine_ver}.apk"
+            cp "$apk" "$asset"
+            gh release upload "$tag" "$asset" --repo "${{ github.repository }}" --clobber
+          done

@@ -1,0 +1,22 @@
+pkgname=thinproxy
+pkgver=0.0.1
+pkgrel=0
+pkgdesc="Lightweight asynchronous HTTP/HTTPS proxy"
+url="https://github.com/renaudallard/thinproxy"
+arch="all"
+license="BSD-2-Clause"
+makedepends="gcc make"
+source="$pkgname-$pkgver.tar.gz"
+builddir="$srcdir/$pkgname-$pkgver"
+
+build() {
+	make
+}
+
+check() {
+	./thinproxy -V
+}
+
+package() {
+	make install DESTDIR="$pkgdir" PREFIX=/usr UNITDIR=/lib/systemd/system
+}
