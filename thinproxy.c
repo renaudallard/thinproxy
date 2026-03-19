@@ -52,6 +52,46 @@
 #include <unistd.h>	/* pledge, unveil */
 #endif
 
+#ifndef HAVE_STRLCPY
+#if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__APPLE__) || \
+    defined(__NetBSD__) || defined(__DragonFly__)
+#define HAVE_STRLCPY
+#endif
+#endif
+
+#ifndef HAVE_CLOSEFROM
+#if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__NetBSD__)
+#define HAVE_CLOSEFROM
+#endif
+#endif
+
+#ifndef HAVE_STRLCPY
+static size_t
+strlcpy(char *dst, const char *src, size_t dstsize)
+{
+	size_t n;
+
+	for (n = 0; n + 1 < dstsize && src[n] != '\0'; n++)
+		dst[n] = src[n];
+	if (dstsize > 0)
+		dst[n] = '\0';
+	while (src[n] != '\0')
+		n++;
+	return n;
+}
+#endif
+
+#ifndef HAVE_CLOSEFROM
+static void
+closefrom(int lowfd)
+{
+	int i;
+
+	for (i = lowfd; i < MAX_FDS; i++)
+		(void)close(i);
+}
+#endif
+
 #define THINPROXY_VERSION	"0.0.9"
 #define DEFAULT_ADDR		"127.0.0.1"
 #define DEFAULT_PORT		"8080"
@@ -339,7 +379,7 @@ acl_add(const char *cidr)
 	}
 
 	e = &acl_list[nacl];
-	(void)snprintf(buf, sizeof(buf), "%s", cidr);
+	strlcpy(buf, cidr, sizeof(buf));
 
 	slash = strchr(buf, '/');
 	if (slash != NULL) {
@@ -659,11 +699,11 @@ parse_config(const char *path, int must_exist)
 		}
 
 		if (strcasecmp(key, "listen") == 0) {
-			(void)snprintf(cfg_addr, sizeof(cfg_addr), "%s", val);
+			strlcpy(cfg_addr, val, sizeof(cfg_addr));
 		} else if (strcasecmp(key, "port") == 0) {
-			(void)snprintf(cfg_port, sizeof(cfg_port), "%s", val);
+			strlcpy(cfg_port, val, sizeof(cfg_port));
 		} else if (strcasecmp(key, "user") == 0) {
-			(void)snprintf(cfg_user, sizeof(cfg_user), "%s", val);
+			strlcpy(cfg_user, val, sizeof(cfg_user));
 		} else if (strcasecmp(key, "daemon") == 0) {
 			int b = parse_bool(val, path, lineno);
 			if (b == -1) {
@@ -828,7 +868,7 @@ parse_hostport(const char *s, const char *end,
 			memcpy(port, col + 2, n);
 			port[n] = '\0';
 		} else {
-			(void)snprintf(port, psz, "%s", defport);
+			strlcpy(port, defport, psz);
 		}
 	} else {
 		col = memchr(s, ':', (size_t)(end - s));
@@ -849,7 +889,7 @@ parse_hostport(const char *s, const char *end,
 				return -1;
 			memcpy(host, s, n);
 			host[n] = '\0';
-			(void)snprintf(port, psz, "%s", defport);
+			strlcpy(port, defport, psz);
 		}
 	}
 	return 0;
@@ -922,7 +962,7 @@ parse_request(const char *req, size_t len,
 			memcpy(path, slash, n);
 			path[n] = '\0';
 		} else {
-			(void)snprintf(path, pathsz, "/");
+			strlcpy(path, "/", pathsz);
 		}
 	}
 
@@ -1033,12 +1073,13 @@ dns_child(const char *host, const char *port, int wfd)
 {
 	struct addrinfo hints, *res;
 	struct dns_result dr;
-	int err, i;
+	int err;
 
-	for (i = 3; i < MAX_FDS; i++) {
-		if (i != wfd)
-			(void)close(i);
+	if (wfd != 3) {
+		(void)dup2(wfd, 3);
+		wfd = 3;
 	}
+	closefrom(4);
 
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_UNSPEC;
@@ -1786,8 +1827,7 @@ main(int argc, char *argv[])
 	while ((ch = getopt(argc, argv, "b:df:p:u:Vv")) != -1) {
 		switch (ch) {
 		case 'b':
-			(void)snprintf(cfg_addr, sizeof(cfg_addr),
-			    "%s", optarg);
+			strlcpy(cfg_addr, optarg, sizeof(cfg_addr));
 			break;
 		case 'd':
 			dflag = 1;
@@ -1795,12 +1835,10 @@ main(int argc, char *argv[])
 		case 'f':
 			break;
 		case 'p':
-			(void)snprintf(cfg_port, sizeof(cfg_port),
-			    "%s", optarg);
+			strlcpy(cfg_port, optarg, sizeof(cfg_port));
 			break;
 		case 'u':
-			(void)snprintf(cfg_user, sizeof(cfg_user),
-			    "%s", optarg);
+			strlcpy(cfg_user, optarg, sizeof(cfg_user));
 			break;
 		case 'V':
 			fprintf(stderr, "thinproxy %s\n", THINPROXY_VERSION);
