@@ -5,7 +5,9 @@ WARNINGS =	-Wall -Wextra -Werror -pedantic -std=c99 \
 		-Wshadow -Wstrict-prototypes -Wmissing-prototypes \
 		-Wold-style-definition -Wimplicit-fallthrough
 HARDENING =	-fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE
-LDFLAGS +=	-pie -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack
+LINKER_HARDENING !=	if [ "$$(uname -s)" != "Darwin" ]; then \
+				echo "-pie -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack"; \
+			else echo "-pie"; fi
 
 PREFIX ?=	/usr/local
 BINDIR ?=	$(PREFIX)/bin
@@ -15,7 +17,7 @@ UNITDIR ?=	/lib/systemd/system
 all: thinproxy
 
 thinproxy: thinproxy.c
-	$(CC) $(CFLAGS) $(WARNINGS) $(HARDENING) $(LDFLAGS) -o $@ thinproxy.c
+	$(CC) $(CFLAGS) $(WARNINGS) $(HARDENING) $(LINKER_HARDENING) $(LDFLAGS) -o $@ thinproxy.c
 
 install: thinproxy
 	install -d $(DESTDIR)$(BINDIR)
