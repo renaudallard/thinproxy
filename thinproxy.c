@@ -1317,11 +1317,6 @@ conn_update_poll(struct conn *c)
 	if (c->c2s_len > 0)
 		sev |= POLLOUT;
 
-	if (cev == 0 && sev == 0) {
-		conn_close(c);
-		return;
-	}
-
 	if (c->cfd >= 0)
 		poll_mod(c->cfd, cev);
 	if (c->sfd >= 0)
