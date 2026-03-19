@@ -52,7 +52,7 @@
 #include <unistd.h>	/* pledge, unveil */
 #endif
 
-#define THINPROXY_VERSION	"0.0.6"
+#define THINPROXY_VERSION	"0.0.7"
 #define DEFAULT_ADDR		"127.0.0.1"
 #define DEFAULT_PORT		"8080"
 #define DEFAULT_CONFIG		"/etc/thinproxy.conf"
