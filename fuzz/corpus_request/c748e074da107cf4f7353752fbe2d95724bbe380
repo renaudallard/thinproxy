@@ -1,0 +1,5 @@
+GET http://th?q=1 HTTP/1.1
+Host: example.com
+Proxy-Connection: keep-alive
+Connection: T http:e
+

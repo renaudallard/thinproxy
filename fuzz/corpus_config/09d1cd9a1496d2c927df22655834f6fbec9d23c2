@@ -1,0 +1,12 @@
+listen 12.0.8080
+daemon no
+verbose yes
+max_connections 2isten 12.0.8080
+daemon no
+verbose yes
+max_connections 28
+idle_timeout 3}
+idle_timeout 30ections 2ist2.0.8080
+daemon no
+verbose yes
+max_connections0

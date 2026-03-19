@@ -1,0 +1,4 @@
+#ll line commet
+listen 0.0.0.0 # inline cont
+port 3128
+  verbose yes

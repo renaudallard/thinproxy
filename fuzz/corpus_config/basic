@@ -1,0 +1,6 @@
+listen 127.0.0.1
+port 8080
+daemon no
+verbose yes
+max_connections 256
+idle_timeout 300

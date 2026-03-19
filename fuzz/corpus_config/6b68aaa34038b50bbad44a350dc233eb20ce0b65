@@ -1,0 +1,3 @@
+listen yes
+max_connections 14040
+daed 20

@@ -1682,6 +1682,7 @@ usage(void)
 	exit(1);
 }
 
+#ifndef THINPROXY_NO_MAIN
 int
 main(int argc, char *argv[])
 {
@@ -1811,3 +1812,4 @@ main(int argc, char *argv[])
 		closelog();
 	return 0;
 }
+#endif /* THINPROXY_NO_MAIN */

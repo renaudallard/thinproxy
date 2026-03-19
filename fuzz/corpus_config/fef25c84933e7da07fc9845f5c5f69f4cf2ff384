@@ -1,0 +1,4 @@
+deny_private yes
+max_connections_per_ip 16portctions_per_ip 16
+deny_private yes
+max_connections_rpe_ipdy

@@ -1,0 +1,5 @@
+listen 12.0.8080
+daemon no
+verbose yes
+max_connections 28
+idle_timeout 300

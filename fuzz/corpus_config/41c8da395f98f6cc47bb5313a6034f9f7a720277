@@ -1,0 +1,5 @@
+listen 1 8080
+daemon no
+daemon no
+
+idle00

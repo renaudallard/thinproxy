@@ -1,0 +1,5 @@
+deny_private yes
+connect_port 443
+connect_port 8
+max_connections_per_ip 16
+user nbody

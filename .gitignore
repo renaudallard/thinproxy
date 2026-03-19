@@ -1,2 +1,4 @@
 thinproxy
 *.o
+fuzz_request
+fuzz_config

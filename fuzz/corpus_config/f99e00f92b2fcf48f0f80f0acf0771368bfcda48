@@ -1,0 +1,4 @@
+#ll lit
+listen 0.0.0.0 # inline cont
+port 3128
+  verbose yes

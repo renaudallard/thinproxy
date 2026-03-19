@@ -1,0 +1,4 @@
+# full line comment
+listen 0.0.0.0 # inline comment
+port 3128
+  verbose yes

@@ -1,0 +1,9 @@
+listen 12.08/0
+daemon no
+verbose yes
+max_connections 2i=st12.0.8080
+daemon no
+verbose yes
+max_connections 28
+idle_timeout 38
+idle_timeout 300
