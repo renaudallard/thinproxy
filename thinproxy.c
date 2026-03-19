@@ -620,6 +620,12 @@ parse_config(const char *path, int must_exist)
 		p = strchr(line, '\n');
 		if (p != NULL)
 			*p = '\0';
+		else if (strlen(line) >= sizeof(line) - 1) {
+			logmsg(LOG_ERR, "%s:%d: line too long",
+			    path, lineno);
+			fclose(fp);
+			return -1;
+		}
 
 		p = strchr(line, '#');
 		if (p != NULL)
