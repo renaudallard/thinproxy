@@ -2,3 +2,9 @@ thinproxy
 *.o
 fuzz_request
 fuzz_config
+debian/debhelper-build-stamp
+debian/files
+debian/*.debhelper
+debian/*.substvars
+debian/.debhelper/
+debian/thinproxy/
