@@ -158,7 +158,8 @@ enum conn_state {
 	S_RESOLVING,	/* async DNS resolution */
 	S_CONNECTING,	/* async connect to upstream */
 	S_RESPONSE,	/* sending CONNECT 200 to client */
-	S_RELAY		/* bidirectional data relay */
+	S_RELAY,	/* bidirectional data relay */
+	S_SPLICED	/* kernel-level relay via SO_SPLICE */
 };
 
 enum fd_type {
@@ -1416,6 +1417,34 @@ handle_response(struct conn *c)
 
 	if (c->s2c_len == 0) {
 		c->s2c_off = 0;
+#ifdef SO_SPLICE
+		/*
+		 * Let the kernel relay the CONNECT tunnel.
+		 * Falls back to userspace relay if splice fails.
+		 */
+		{
+			struct splice sp;
+			memset(&sp, 0, sizeof(sp));
+			sp.sp_idle.tv_sec = (time_t)cfg_timeout;
+
+			sp.sp_fd = c->sfd;
+			if (setsockopt(c->cfd, SOL_SOCKET, SO_SPLICE,
+			    &sp, sizeof(sp)) == 0) {
+				sp.sp_fd = c->cfd;
+				if (setsockopt(c->sfd, SOL_SOCKET,
+				    SO_SPLICE, &sp, sizeof(sp)) == 0) {
+					c->state = S_SPLICED;
+					poll_mod(c->cfd, POLLIN);
+					poll_mod(c->sfd, POLLIN);
+					return;
+				}
+				/* undo first splice */
+				sp.sp_fd = -1;
+				(void)setsockopt(c->cfd, SOL_SOCKET,
+				    SO_SPLICE, &sp, sizeof(sp));
+			}
+		}
+#endif
 		c->state = S_RELAY;
 		poll_mod(c->cfd, POLLIN);
 		poll_mod(c->sfd, POLLIN);
@@ -1731,6 +1760,9 @@ event_loop(int lfd)
 						c->seof = 1;
 					conn_update_poll(c);
 				}
+				break;
+			case S_SPLICED:
+				conn_close(c);
 				break;
 			}
 
