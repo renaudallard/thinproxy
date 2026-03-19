@@ -1,37 +1,51 @@
 # thinproxy
 
-Lightweight, asynchronous HTTP/HTTPS proxy written in C.
+Lightweight, asynchronous HTTP/HTTPS proxy written in C. Zero dependencies, single file, minimal attack surface.
 
 ## Features
 
+**Proxy**
 - HTTP request forwarding with header rewriting
 - HTTPS tunneling via CONNECT method
+- IPv4 and IPv6 support
+
+**Performance**
 - Single-threaded, non-blocking I/O using poll(2)
 - Asynchronous DNS resolution via forked processes
 - Small memory footprint (~25 KB per connection)
-- CONNECT port whitelist and private address blocking (SSRF protection)
+
+**Security**
+- Source IP access control lists (allow/deny with CIDR)
+- CONNECT port whitelist
+- Private/reserved address blocking (SSRF protection)
 - Per-IP connection limits
-- Configuration file with ACL support
 - Privilege dropping after bind
 - OpenBSD pledge(2) and unveil(2) support
 - Syslog logging in daemon mode
-- IPv4 and IPv6 support
 
 ## Build
 
-    make
+```
+make
+```
 
 ## Install
 
-    make install
+```
+make install
+```
 
 The default prefix is `/usr/local`. Override with:
 
-    make install PREFIX=/usr DESTDIR=/tmp/pkg
+```
+make install PREFIX=/usr DESTDIR=/tmp/pkg
+```
 
 ## Usage
 
-    thinproxy [-dVv] [-b address] [-f config] [-p port] [-u user]
+```
+thinproxy [-dVv] [-b address] [-f config] [-p port] [-u user]
+```
 
 ### Options
 
@@ -49,49 +63,55 @@ CLI flags override configuration file values.
 
 ### Examples
 
-Start with default settings:
+```sh
+# Start with default settings
+thinproxy
 
-    thinproxy
+# Custom configuration file
+thinproxy -f /path/to/thinproxy.conf
 
-Use a custom configuration file:
+# Listen on all interfaces with verbose logging
+thinproxy -v -b 0.0.0.0 -p 3128
 
-    thinproxy -f /path/to/thinproxy.conf
+# Run as a daemon with privilege dropping
+thinproxy -d -u nobody -p 8080
 
-Listen on all interfaces with verbose logging:
-
-    thinproxy -v -b 0.0.0.0 -p 3128
-
-Run as a daemon with privilege dropping:
-
-    thinproxy -d -u nobody -p 8080
-
-Use with curl:
-
-    curl -x http://127.0.0.1:8080 http://example.com
-    curl -x http://127.0.0.1:8080 https://example.com
+# Use with curl
+curl -x http://127.0.0.1:8080 http://example.com
+curl -x http://127.0.0.1:8080 https://example.com
+```
 
 ## Configuration
 
 Default path: `/etc/thinproxy.conf` (silently ignored if missing).
-
 See `thinproxy.conf.example` for a full example.
 
-### Directives
+### General
 
-| Directive | Description |
-|-----------|-------------|
-| `listen <address>` | Bind address |
-| `port <number>` | Listen port |
-| `user <name>` | Drop privileges to user |
-| `daemon <yes\|no>` | Run as daemon |
-| `verbose <yes\|no>` | Verbose logging |
-| `max_connections <n>` | Max concurrent connections (1-512) |
-| `idle_timeout <n>` | Idle timeout in seconds |
-| `max_connections_per_ip <n>` | Max concurrent connections per source IP |
-| `deny_private <yes\|no>` | Block connections to private/reserved addresses |
-| `connect_port <port>` | Allowed CONNECT port (whitelist, repeatable) |
-| `allow <ip[/prefix]>` | Allow source address (whitelist mode) |
-| `deny <ip[/prefix]>` | Deny source address (blacklist mode) |
+| Directive | Description | Default |
+|-----------|-------------|---------|
+| `listen <address>` | Bind address | `127.0.0.1` |
+| `port <number>` | Listen port | `8080` |
+| `user <name>` | Drop privileges to user | none |
+| `daemon <yes\|no>` | Run as daemon | `no` |
+| `verbose <yes\|no>` | Verbose logging | `no` |
+
+### Limits
+
+| Directive | Description | Default |
+|-----------|-------------|---------|
+| `max_connections <n>` | Max concurrent connections (1-512) | `512` |
+| `max_connections_per_ip <n>` | Max concurrent connections per source IP | unlimited |
+| `idle_timeout <n>` | Idle timeout in seconds | `300` |
+
+### Security
+
+| Directive | Description | Default |
+|-----------|-------------|---------|
+| `deny_private <yes\|no>` | Block connections to private/reserved addresses | `no` |
+| `connect_port <port>` | Allowed CONNECT port (whitelist, repeatable) | all |
+| `allow <ip[/prefix]>` | Allow source address (whitelist mode) | |
+| `deny <ip[/prefix]>` | Deny source address (blacklist mode) | |
 
 ### Access Control
 
@@ -104,13 +124,29 @@ Both IPv4 and IPv6 addresses are supported, with optional CIDR prefix.
 
 Example whitelist:
 
-    allow 127.0.0.1
-    allow 192.168.1.0/24
-    allow ::1
+```
+allow 127.0.0.1
+allow 192.168.1.0/24
+allow ::1
+```
+
+### Hardened Example
+
+```
+listen 0.0.0.0
+port 3128
+user nobody
+daemon yes
+deny_private yes
+connect_port 443
+connect_port 8443
+max_connections_per_ip 16
+allow 192.168.1.0/24
+```
 
 ## Limits
 
-- Maximum 512 concurrent connections (configurable)
+- Maximum 512 concurrent connections (compile-time)
 - 8 KB buffer per direction per connection
 
 ## License
