@@ -138,6 +138,7 @@ static struct conn		*fdmap[MAX_FDS];
 static int			fdtype_arr[MAX_FDS];
 static int			fd_pidx[MAX_FDS];
 static int			nconns;
+static int			accept_paused;
 static int			vflag;
 static int			dflag;
 static int			use_syslog;
@@ -284,6 +285,7 @@ conn_close(struct conn *c)
 	}
 	free(c);
 	nconns--;
+	accept_paused = 0;
 }
 
 static struct conn *
@@ -1411,7 +1413,10 @@ accept_conn(int lfd)
 	sl = sizeof(ss);
 	fd = accept(lfd, (struct sockaddr *)&ss, &sl);
 	if (fd == -1) {
-		if (errno != EAGAIN && errno != ECONNABORTED &&
+		if (errno == EMFILE || errno == ENFILE) {
+			logmsg(LOG_ERR, "accept: %s", strerror(errno));
+			accept_paused = 1;
+		} else if (errno != EAGAIN && errno != ECONNABORTED &&
 		    errno != EINTR)
 			logmsg(LOG_ERR, "accept: %s", strerror(errno));
 		return;
@@ -1501,7 +1506,8 @@ event_loop(int lfd)
 	last_reap = time(NULL);
 
 	while (running) {
-		poll_mod(lfd, nconns < cfg_maxconns ? POLLIN : 0);
+		poll_mod(lfd, (nconns < cfg_maxconns && !accept_paused)
+		    ? POLLIN : 0);
 
 		ret = poll(pfds, npfds, POLL_TIMEOUT);
 		if (ret == -1) {
