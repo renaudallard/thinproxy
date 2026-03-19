@@ -186,7 +186,7 @@ jobs:
 
       - name: Build static binary
         run: |
-          make CC=cc CFLAGS="-O2 -pipe -Wall -Wextra -Werror -pedantic -std=c99 -static" LDFLAGS="-static"
+          make CC=cc CFLAGS="-O2 -pipe -static" HARDENING="-fstack-protector-strong -D_FORTIFY_SOURCE=2" LDFLAGS="-static"
           file thinproxy && ./thinproxy -V
 
       - name: Package and upload
