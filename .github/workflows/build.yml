@@ -62,7 +62,7 @@ jobs:
           pacman -Sy --noconfirm gcc make git
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build
         run: make -j$(nproc)
@@ -74,13 +74,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, macos-13]
+        os: [macos-latest, macos-14]
     name: macOS (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build
         run: make -j$(sysctl -n hw.ncpu)

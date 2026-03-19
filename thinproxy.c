@@ -165,6 +165,16 @@ static int			nconnect_ports;
 static void	conn_close(struct conn *);
 static void	conn_update_poll(struct conn *);
 
+/* best-effort write; return value intentionally discarded */
+static void
+ign_write(int fd, const void *buf, size_t len)
+{
+	ssize_t r;
+
+	r = write(fd, buf, len);
+	(void)r;
+}
+
 static void
 logmsg(int pri, const char *fmt, ...)
 {
@@ -999,7 +1009,7 @@ dns_child(const char *host, const char *port, int wfd)
 	err = getaddrinfo(host, port, &hints, &res);
 	if (err != 0 || res == NULL) {
 		dr.err = -1;
-		(void)write(wfd, &dr, sizeof(dr));
+		ign_write(wfd, &dr, sizeof(dr));
 		_exit(0);
 	}
 
@@ -1011,7 +1021,7 @@ dns_child(const char *host, const char *port, int wfd)
 	memcpy(&dr.addr, res->ai_addr, res->ai_addrlen);
 	freeaddrinfo(res);
 
-	(void)write(wfd, &dr, sizeof(dr));
+	ign_write(wfd, &dr, sizeof(dr));
 	_exit(0);
 }
 
@@ -1082,7 +1092,7 @@ handle_request(struct conn *c)
 	if (eoh == NULL) {
 		if (c->req_len >= sizeof(c->req) - 1) {
 			logmsg(LOG_WARNING, "request too large");
-			(void)write(c->cfd, ERR_400, sizeof(ERR_400) - 1);
+			ign_write(c->cfd, ERR_400, sizeof(ERR_400) - 1);
 			conn_close(c);
 		}
 		return;
@@ -1092,7 +1102,7 @@ handle_request(struct conn *c)
 	    host, sizeof(host), port, sizeof(port),
 	    path, sizeof(path), &is_connect) == -1) {
 		logmsg(LOG_WARNING, "malformed request");
-		(void)write(c->cfd, ERR_400, sizeof(ERR_400) - 1);
+		ign_write(c->cfd, ERR_400, sizeof(ERR_400) - 1);
 		conn_close(c);
 		return;
 	}
@@ -1116,7 +1126,7 @@ handle_request(struct conn *c)
 
 	if (is_connect && !connect_port_allowed(port)) {
 		logmsg(LOG_WARNING, "CONNECT port %s denied", port);
-		(void)write(c->cfd, ERR_403, sizeof(ERR_403) - 1);
+		ign_write(c->cfd, ERR_403, sizeof(ERR_403) - 1);
 		conn_close(c);
 		return;
 	}
@@ -1126,7 +1136,7 @@ handle_request(struct conn *c)
 		    c->c2s, sizeof(c->c2s), method, path);
 		if (built == -1) {
 			logmsg(LOG_WARNING, "request build failed");
-			(void)write(c->cfd, ERR_400, sizeof(ERR_400) - 1);
+			ign_write(c->cfd, ERR_400, sizeof(ERR_400) - 1);
 			conn_close(c);
 			return;
 		}
@@ -1136,7 +1146,7 @@ handle_request(struct conn *c)
 
 	if (dns_resolve_start(c, host, port) == -1) {
 		logmsg(LOG_WARNING, "resolve %s:%s failed", host, port);
-		(void)write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
+		ign_write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
 		conn_close(c);
 		return;
 	}
@@ -1171,7 +1181,7 @@ handle_resolving(struct conn *c)
 
 	if (nr != (ssize_t)sizeof(dr) || dr.err != 0) {
 		logmsg(LOG_WARNING, "DNS resolution failed");
-		(void)write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
+		ign_write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
 		conn_close(c);
 		return;
 	}
@@ -1179,7 +1189,7 @@ handle_resolving(struct conn *c)
 	if (cfg_deny_private &&
 	    is_private_addr((struct sockaddr *)&dr.addr)) {
 		logmsg(LOG_WARNING, "private address denied");
-		(void)write(c->cfd, ERR_403, sizeof(ERR_403) - 1);
+		ign_write(c->cfd, ERR_403, sizeof(ERR_403) - 1);
 		conn_close(c);
 		return;
 	}
@@ -1188,14 +1198,14 @@ handle_resolving(struct conn *c)
 	if (fd == -1 || fd >= MAX_FDS) {
 		if (fd != -1)
 			close(fd);
-		(void)write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
+		ign_write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
 		conn_close(c);
 		return;
 	}
 
 	if (set_nonblock(fd) == -1) {
 		close(fd);
-		(void)write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
+		ign_write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
 		conn_close(c);
 		return;
 	}
@@ -1208,7 +1218,7 @@ handle_resolving(struct conn *c)
 		if (errno != EINPROGRESS) {
 			logmsg(LOG_WARNING, "connect: %s", strerror(errno));
 			close(fd);
-			(void)write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
+			ign_write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
 			conn_close(c);
 			return;
 		}
@@ -1234,7 +1244,7 @@ handle_connecting(struct conn *c)
 	    err != 0) {
 		logmsg(LOG_WARNING, "upstream: %s",
 		    strerror(err ? err : errno));
-		(void)write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
+		ign_write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
 		conn_close(c);
 		return;
 	}
@@ -1409,7 +1419,7 @@ accept_conn(int lfd)
 	if (!acl_check((struct sockaddr *)&ss)) {
 		if (vflag)
 			logmsg(LOG_INFO, "denied by ACL");
-		(void)write(fd, ERR_403, sizeof(ERR_403) - 1);
+		ign_write(fd, ERR_403, sizeof(ERR_403) - 1);
 		close(fd);
 		return;
 	}
@@ -1417,7 +1427,7 @@ accept_conn(int lfd)
 	if (!per_ip_check((struct sockaddr *)&ss)) {
 		if (vflag)
 			logmsg(LOG_INFO, "per-IP connection limit reached");
-		(void)write(fd, ERR_503, sizeof(ERR_503) - 1);
+		ign_write(fd, ERR_503, sizeof(ERR_503) - 1);
 		close(fd);
 		return;
 	}
@@ -1438,7 +1448,7 @@ accept_conn(int lfd)
 
 	c = conn_alloc(fd);
 	if (c == NULL) {
-		(void)write(fd, ERR_503, sizeof(ERR_503) - 1);
+		ign_write(fd, ERR_503, sizeof(ERR_503) - 1);
 		close(fd);
 		return;
 	}
@@ -1739,6 +1749,10 @@ main(int argc, char *argv[])
 	}
 
 	if (dflag) {
+#ifdef __APPLE__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 		if (daemon(0, 0) == -1) {
 			logmsg(LOG_ERR, "daemon: %s", strerror(errno));
 			close(lfd);
@@ -1746,6 +1760,9 @@ main(int argc, char *argv[])
 		}
 		use_syslog = 1;
 		openlog("thinproxy", LOG_PID | LOG_NDELAY, LOG_DAEMON);
+#ifdef __APPLE__
+#pragma GCC diagnostic pop
+#endif
 	}
 
 #ifdef __OpenBSD__
