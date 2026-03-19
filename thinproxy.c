@@ -225,6 +225,7 @@ static int			fdtype_arr[MAX_FDS];
 static int			fd_pidx[MAX_FDS];
 static int			nconns;
 static int			accept_paused;
+static time_t			now;
 static int			vflag;
 static int			dflag;
 static int			use_syslog;
@@ -392,7 +393,7 @@ conn_alloc(int cfd)
 	c->sfd = -1;
 	c->rfd = -1;
 	c->state = S_REQUEST;
-	c->atime = time(NULL);
+	c->atime = now;
 	nconns++;
 	return c;
 }
@@ -1217,7 +1218,7 @@ handle_request(struct conn *c)
 	}
 	c->req_len += (size_t)nr;
 	c->req[c->req_len] = '\0';
-	c->atime = time(NULL);
+	c->atime = now;
 
 	eoh = find_eoh(c->req, c->req_len);
 	if (eoh == NULL) {
@@ -1379,7 +1380,7 @@ handle_connecting(struct conn *c)
 		conn_close(c);
 		return;
 	}
-	c->atime = time(NULL);
+	c->atime = now;
 
 	if (c->is_connect) {
 		static const char ok[] =
@@ -1411,7 +1412,7 @@ handle_response(struct conn *c)
 
 	c->s2c_off += (size_t)nw;
 	c->s2c_len -= (size_t)nw;
-	c->atime = time(NULL);
+	c->atime = now;
 
 	if (c->s2c_len == 0) {
 		c->s2c_off = 0;
@@ -1488,7 +1489,7 @@ handle_relay_read(struct conn *c, int fd)
 	}
 
 	*len += (size_t)nr;
-	c->atime = time(NULL);
+	c->atime = now;
 	conn_update_poll(c);
 }
 
@@ -1519,7 +1520,7 @@ handle_relay_write(struct conn *c, int fd)
 	*len -= (size_t)nw;
 	if (*len == 0)
 		*off = 0;
-	c->atime = time(NULL);
+	c->atime = now;
 	conn_update_poll(c);
 }
 
@@ -1608,10 +1609,8 @@ accept_conn(int lfd)
 static void
 reap_timeouts(void)
 {
-	time_t now;
 	int fd;
 
-	now = time(NULL);
 	for (fd = 0; fd < MAX_FDS; fd++) {
 		struct conn *c = fdmap[fd];
 		if (c == NULL || fdtype_arr[fd] == FD_LISTEN)
@@ -1639,7 +1638,8 @@ event_loop(int lfd)
 	nfds_t i;
 	time_t last_reap;
 
-	last_reap = time(NULL);
+	now = time(NULL);
+	last_reap = now;
 
 	while (running) {
 		poll_mod(lfd, (nconns < cfg_maxconns && !accept_paused)
@@ -1652,6 +1652,8 @@ event_loop(int lfd)
 			logmsg(LOG_ERR, "poll: %s", strerror(errno));
 			break;
 		}
+
+		now = time(NULL);
 
 		nev = 0;
 		for (i = 0; i < npfds; i++) {
@@ -1730,12 +1732,9 @@ event_loop(int lfd)
 				conn_close(fdmap[fd]);
 		}
 
-		{
-			time_t now = time(NULL);
-			if (now - last_reap >= POLL_TIMEOUT / 1000) {
-				reap_timeouts();
-				last_reap = now;
-			}
+		if (now - last_reap >= POLL_TIMEOUT / 1000) {
+			reap_timeouts();
+			last_reap = now;
 		}
 	}
 }
