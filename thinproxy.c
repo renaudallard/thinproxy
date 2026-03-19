@@ -150,7 +150,7 @@ static char			cfg_user[64];
 static int			cfg_maxconns = MAX_CONNS;
 static int			cfg_timeout = 300;
 static int			cfg_deny_private;
-static int			cfg_maxconns_per_ip;
+static int			cfg_maxconns_per_ip = 32;
 
 /* ACL */
 static enum acl_mode		acl_mode;

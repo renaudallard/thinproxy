@@ -108,7 +108,7 @@ See `thinproxy.conf.example` for a full example.
 | Directive | Description | Default |
 |-----------|-------------|---------|
 | `max_connections <n>` | Max concurrent connections (1-512) | `512` |
-| `max_connections_per_ip <n>` | Max concurrent connections per source IP | unlimited |
+| `max_connections_per_ip <n>` | Max concurrent connections per source IP | `32` |
 | `idle_timeout <n>` | Idle timeout in seconds | `300` |
 
 ### Security
