@@ -54,6 +54,7 @@ jobs:
       - name: Install build tools (zypper)
         if: contains(matrix.image, 'opensuse')
         run: |
+          zypper --non-interactive --gpg-auto-import-keys refresh || true
           zypper install -y gcc make git
 
       - name: Install build tools (pacman)
