@@ -159,8 +159,8 @@ static int			nacl;
 
 /* CONNECT port whitelist */
 #define MAX_CONNECT_PORTS	64
-static int			connect_ports[MAX_CONNECT_PORTS];
-static int			nconnect_ports;
+static int			connect_ports[MAX_CONNECT_PORTS] = { 443 };
+static int			nconnect_ports = 1;
 
 /* forward declarations */
 static void	conn_close(struct conn *);
@@ -736,6 +736,7 @@ parse_config(const char *path, int must_exist)
 			}
 			cfg_deny_private = b;
 		} else if (strcasecmp(key, "connect_port") == 0) {
+			static int connect_port_seen;
 			int n = atoi(val);
 			if (n <= 0 || n > 65535) {
 				logmsg(LOG_ERR,
@@ -743,6 +744,10 @@ parse_config(const char *path, int must_exist)
 				    path, lineno, val);
 				fclose(fp);
 				return -1;
+			}
+			if (!connect_port_seen) {
+				nconnect_ports = 0;
+				connect_port_seen = 1;
 			}
 			if (nconnect_ports >= MAX_CONNECT_PORTS) {
 				logmsg(LOG_ERR,

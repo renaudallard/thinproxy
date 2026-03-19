@@ -130,7 +130,8 @@ When any
 .Cm connect_port
 directive is present, CONNECT requests to unlisted ports are denied
 with 403 Forbidden.
-If omitted, all ports are allowed.
+The default allows port 443 only.
+Config entries replace the defaults.
 .It Cm allow Ar address Ns Op / Ns Ar prefix
 Allow connections from
 .Ar address .

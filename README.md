@@ -116,7 +116,7 @@ See `thinproxy.conf.example` for a full example.
 | Directive | Description | Default |
 |-----------|-------------|---------|
 | `deny_private <yes\|no>` | Block connections to private/reserved addresses | `yes` |
-| `connect_port <port>` | Allowed CONNECT port (whitelist, repeatable) | all |
+| `connect_port <port>` | Allowed CONNECT port (whitelist, repeatable) | `443` |
 | `allow <ip[/prefix]>` | Allow source address (whitelist mode) | |
 | `deny <ip[/prefix]>` | Deny source address (blacklist mode) | |
 

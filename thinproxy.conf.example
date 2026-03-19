@@ -30,8 +30,9 @@ port 8080
 # Prevents SSRF by denying RFC 1918, loopback, link-local, etc.
 #deny_private yes
 
-# Restrict CONNECT method to specific ports (default: all ports allowed)
+# Restrict CONNECT method to specific ports (default: 443)
 # When set, CONNECT to unlisted ports is denied with 403.
+# Config entries replace the defaults.
 #connect_port 443
 #connect_port 8443
 
