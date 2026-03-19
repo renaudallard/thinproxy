@@ -1,3 +1,9 @@
+thinproxy (0.0.9-1) unstable; urgency=low
+
+  * Skip privilege drop when already running as target user.
+
+ -- Renaud Allard <renaud@allard.it>  Thu, 19 Mar 2026 00:00:00 +0000
+
 thinproxy (0.0.8-1) unstable; urgency=low
 
   * Set SO_LINGER at accept time to prevent FIN_WAIT_2 on any exit.
