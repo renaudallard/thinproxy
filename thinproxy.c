@@ -1636,7 +1636,7 @@ static int
 setup_listener(const char *addr, const char *port)
 {
 	struct addrinfo hints, *res, *r;
-	int fd = -1, err, on;
+	int fd = -1, err, on, attempt;
 
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_UNSPEC;
@@ -1649,26 +1649,40 @@ setup_listener(const char *addr, const char *port)
 		return -1;
 	}
 
-	for (r = res; r != NULL; r = r->ai_next) {
-		fd = socket(r->ai_family, r->ai_socktype, r->ai_protocol);
-		if (fd == -1) {
-			err = errno;
-			continue;
-		}
-		on = 1;
-		(void)setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
-		    &on, sizeof(on));
+	/*
+	 * Retry bind when the address is temporarily held by
+	 * orphaned TCP connections (FIN_WAIT_2, TIME_WAIT).
+	 * SO_REUSEADDR/SO_REUSEPORT do not cover all cases
+	 * on OpenBSD.
+	 */
+	for (attempt = 0; attempt < 5; attempt++) {
+		for (r = res; r != NULL; r = r->ai_next) {
+			fd = socket(r->ai_family, r->ai_socktype,
+			    r->ai_protocol);
+			if (fd == -1) {
+				err = errno;
+				continue;
+			}
+			on = 1;
+			(void)setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
+			    &on, sizeof(on));
 #ifdef SO_REUSEPORT
-		(void)setsockopt(fd, SOL_SOCKET, SO_REUSEPORT,
-		    &on, sizeof(on));
+			(void)setsockopt(fd, SOL_SOCKET, SO_REUSEPORT,
+			    &on, sizeof(on));
 #endif
-		if (bind(fd, r->ai_addr, r->ai_addrlen) == -1) {
-			err = errno;
-			close(fd);
-			fd = -1;
-			continue;
+			if (bind(fd, r->ai_addr, r->ai_addrlen) == -1) {
+				err = errno;
+				close(fd);
+				fd = -1;
+				continue;
+			}
+			break;
 		}
-		break;
+		if (fd != -1 || err != EADDRINUSE)
+			break;
+		logmsg(LOG_INFO, "bind %s:%s: retrying (%d/5)",
+		    addr, port, attempt + 1);
+		sleep(1);
 	}
 	freeaddrinfo(res);
 
