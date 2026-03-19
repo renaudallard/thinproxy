@@ -1,5 +1,5 @@
 pkgname=thinproxy
-pkgver=0.0.7
+pkgver=0.0.8
 pkgrel=0
 pkgdesc="Lightweight asynchronous HTTP/HTTPS proxy"
 url="https://github.com/renaudallard/thinproxy"
