@@ -1,8 +1,6 @@
 name: Release
 
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
     inputs:
       ref:
@@ -21,20 +19,6 @@ env:
   RPMBUILD_TOPDIR: /tmp/rpmbuild
 
 jobs:
-  create-release:
-    name: Create release
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    steps:
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create "${{ github.ref_name }}" \
-            --repo "${{ github.repository }}" \
-            --title "${{ github.ref_name }}" \
-            --generate-notes
-
   detect-versions:
     name: Detect distro versions
     runs-on: ubuntu-latest
@@ -145,7 +129,7 @@ jobs:
               except Exception:
                   return "latest"
 
-          tag = os.environ.get("GITHUB_REF_NAME", "v0.0.1")
+          tag = "${{ inputs.release_tag }}" or os.environ.get("GITHUB_REF_NAME", "v0.0.1")
           version = tag.lstrip("v")
 
           rl = rocky()
@@ -177,8 +161,6 @@ jobs:
             suffix: linux-amd64-musl
     name: generic-${{ matrix.suffix }}
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
-    needs: create-release
-    if: always() && (needs.create-release.result == 'success' || needs.create-release.result == 'skipped')
     container:
       image: ${{ matrix.image }}
     steps:
@@ -200,7 +182,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+          ref: ${{ inputs.ref }}
 
       - name: Build static binary
         run: |
@@ -211,7 +193,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}"
+          tag="${{ inputs.release_tag }}"
           tar czf "thinproxy-${tag}-${{ matrix.suffix }}.tar.gz" \
             thinproxy thinproxy.8 thinproxy.conf.example thinproxy.service LICENSE README.md
           gh release upload "$tag" "thinproxy-${tag}-${{ matrix.suffix }}.tar.gz" \
@@ -220,20 +202,18 @@ jobs:
   build-macos:
     name: generic-macos-arm64
     runs-on: macos-latest
-    needs: create-release
-    if: always() && (needs.create-release.result == 'success' || needs.create-release.result == 'skipped')
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+          ref: ${{ inputs.ref }}
 
       - name: Build and upload
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           make && ./thinproxy -V
-          tag="${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}"
+          tag="${{ inputs.release_tag }}"
           tar czf "thinproxy-${tag}-macos-arm64.tar.gz" \
             thinproxy thinproxy.8 thinproxy.conf.example LICENSE README.md
           gh release upload "$tag" "thinproxy-${tag}-macos-arm64.tar.gz" \
@@ -258,8 +238,7 @@ jobs:
             version_key: debian_oldstable
     name: deb-${{ matrix.distro }}-${{ matrix.track }}
     runs-on: ubuntu-latest
-    needs: [create-release, detect-versions]
-    if: always() && (needs.create-release.result == 'success' || needs.create-release.result == 'skipped') && needs.detect-versions.result == 'success'
+    needs: detect-versions
     container:
       image: ${{ matrix.distro }}:${{ needs.detect-versions.outputs[matrix.version_key] }}
     steps:
@@ -276,7 +255,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+          ref: ${{ inputs.ref }}
 
       - name: Build deb package
         run: |
@@ -289,7 +268,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}"
+          tag="${{ inputs.release_tag }}"
           for deb in ../*.deb; do
             name=$(dpkg-deb -f "$deb" Package)
             ver=$(dpkg-deb -f "$deb" Version)
@@ -314,8 +293,7 @@ jobs:
             pkg_cmd: dnf
     name: rpm-${{ matrix.distro }}
     runs-on: ubuntu-latest
-    needs: [create-release, detect-versions]
-    if: always() && (needs.create-release.result == 'success' || needs.create-release.result == 'skipped') && needs.detect-versions.result == 'success'
+    needs: detect-versions
     container:
       image: ${{ matrix.image_prefix }}${{ needs.detect-versions.outputs[matrix.image_key] }}
     steps:
@@ -341,7 +319,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+          ref: ${{ inputs.ref }}
 
       - name: Build RPM
         run: |
@@ -358,7 +336,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}"
+          tag="${{ inputs.release_tag }}"
           distro_ver="${{ needs.detect-versions.outputs[matrix.image_key] }}"
           find "$RPMBUILD_TOPDIR/RPMS" -name '*.rpm' | while read -r rpm; do
             base=$(basename "$rpm" .rpm)
@@ -370,8 +348,7 @@ jobs:
   build-apk:
     name: apk-alpine
     runs-on: ubuntu-latest
-    needs: [create-release, detect-versions]
-    if: always() && (needs.create-release.result == 'success' || needs.create-release.result == 'skipped') && needs.detect-versions.result == 'success'
+    needs: detect-versions
     container:
       image: alpine:${{ needs.detect-versions.outputs.alpine_latest }}
     defaults:
@@ -387,7 +364,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+          ref: ${{ inputs.ref }}
 
       - name: Build APK
         run: |
@@ -417,7 +394,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}"
+          tag="${{ inputs.release_tag }}"
           alpine_ver="${{ needs.detect-versions.outputs.alpine_latest }}"
           find /home/builder/packages -name '*.apk' | while read -r apk; do
             base=$(basename "$apk" .apk)
