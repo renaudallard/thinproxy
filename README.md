@@ -1,33 +1,32 @@
 # thinproxy
 
-Lightweight, asynchronous HTTP/HTTPS proxy written in C. Zero dependencies, single file, minimal attack surface.
+Lightweight, asynchronous HTTP/HTTPS proxy written in C.
+Zero dependencies, single file, minimal attack surface.
 
 ## Features
 
-**Proxy**
 - HTTP request forwarding with header rewriting
 - HTTPS tunneling via CONNECT method
 - IPv4 and IPv6 support
-
-**Performance**
-- Single-threaded, non-blocking I/O using poll(2)
-- Asynchronous DNS resolution via forked processes
-- Small memory footprint (~25 KB per connection)
-
-**Security**
+- Single-threaded, non-blocking I/O with poll(2)
+- Asynchronous DNS resolution via forked child processes
+- Zero-copy kernel relay for CONNECT tunnels on OpenBSD (SO_SPLICE)
 - Source IP access control lists (allow/deny with CIDR)
-- CONNECT port whitelist
+- CONNECT port whitelist (default: 443 only)
 - Private/reserved address blocking (SSRF protection)
 - Per-IP connection limits
 - Privilege dropping after bind
-- OpenBSD pledge(2) and unveil(2) support
-- Syslog logging in daemon mode
+- OpenBSD pledge(2) and unveil(2) sandboxing
+- Automatic bind retry on restart
+- ~25 KB memory per connection
 
 ## Build
 
 ```
 make
 ```
+
+Builds on OpenBSD, Linux (glibc and musl), macOS, and FreeBSD.
 
 ## Install
 
@@ -41,18 +40,18 @@ The default prefix is `/usr/local`. Override with:
 make install PREFIX=/usr DESTDIR=/tmp/pkg
 ```
 
-On Linux (systemd):
-
-```sh
-sudo systemctl daemon-reload
-sudo systemctl enable --now thinproxy
-```
-
-On OpenBSD:
+### OpenBSD
 
 ```sh
 rcctl enable thinproxy
 rcctl start thinproxy
+```
+
+### Linux (systemd)
+
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now thinproxy
 ```
 
 ## Usage
@@ -60,8 +59,6 @@ rcctl start thinproxy
 ```
 thinproxy [-dVv] [-b address] [-f config] [-p port] [-u user]
 ```
-
-### Options
 
 | Flag | Description |
 |------|-------------|
@@ -73,24 +70,16 @@ thinproxy [-dVv] [-b address] [-f config] [-p port] [-u user]
 | `-V` | Print version and exit |
 | `-v` | Verbose logging |
 
-CLI flags override configuration file values.
+Command-line flags override configuration file values.
 
 ### Examples
 
 ```sh
-# Start with default settings
-thinproxy
+thinproxy                                    # default settings
+thinproxy -v -b 0.0.0.0 -p 3128             # all interfaces, verbose
+thinproxy -d -u _thinproxy                   # daemon with privilege drop
+thinproxy -f /etc/thinproxy/thinproxy.conf   # custom config
 
-# Custom configuration file
-thinproxy -f /path/to/thinproxy.conf
-
-# Listen on all interfaces with verbose logging
-thinproxy -v -b 0.0.0.0 -p 3128
-
-# Run as a daemon with privilege dropping
-thinproxy -d -u _thinproxy -p 8080
-
-# Use with curl
 curl -x http://127.0.0.1:8080 http://example.com
 curl -x http://127.0.0.1:8080 https://example.com
 ```
@@ -104,47 +93,37 @@ See `thinproxy.conf.example` for a full example.
 
 | Directive | Description | Default |
 |-----------|-------------|---------|
-| `listen <address>` | Bind address | `127.0.0.1` |
-| `port <number>` | Listen port | `8080` |
-| `user <name>` | Drop privileges to user | none |
-| `daemon <yes\|no>` | Run as daemon | `no` |
-| `verbose <yes\|no>` | Verbose logging | `no` |
+| `listen` | Bind address | `127.0.0.1` |
+| `port` | Listen port | `8080` |
+| `user` | Drop privileges to user | none |
+| `daemon` | Run as daemon (`yes`/`no`) | `no` |
+| `verbose` | Verbose logging (`yes`/`no`) | `no` |
 
 ### Limits
 
 | Directive | Description | Default |
 |-----------|-------------|---------|
-| `max_connections <n>` | Max concurrent connections (1-512) | `512` |
-| `max_connections_per_ip <n>` | Max concurrent connections per source IP | `32` |
-| `idle_timeout <n>` | Idle timeout in seconds | `300` |
+| `max_connections` | Max concurrent connections (1-512) | `512` |
+| `max_connections_per_ip` | Max connections per source IP (1-512) | `32` |
+| `idle_timeout` | Idle timeout in seconds (1-86400) | `300` |
 
 ### Security
 
 | Directive | Description | Default |
 |-----------|-------------|---------|
-| `deny_private <yes\|no>` | Block connections to private/reserved addresses | `yes` |
-| `connect_port <port>` | Allowed CONNECT port (whitelist, repeatable) | `443` |
-| `allow <ip[/prefix]>` | Allow source address (whitelist mode) | |
-| `deny <ip[/prefix]>` | Deny source address (blacklist mode) | |
+| `deny_private` | Block private/reserved destinations (`yes`/`no`) | `yes` |
+| `connect_port` | Allowed CONNECT port (repeatable) | `443` |
+| `allow` | Allow source address/CIDR (whitelist mode) | |
+| `deny` | Deny source address/CIDR (blacklist mode) | |
 
 ### Access Control
 
-Use `allow` or `deny` directives, but not both:
+Use `allow` or `deny` directives, but not both.
+When `allow` is used, unlisted addresses are denied.
+When `deny` is used, unlisted addresses are allowed.
+Both IPv4 and IPv6 with optional CIDR prefix are supported.
 
-- **Whitelist mode**: when `allow` is used, all other addresses are denied
-- **Blacklist mode**: when `deny` is used, all other addresses are allowed
-
-Both IPv4 and IPv6 addresses are supported, with optional CIDR prefix.
-
-Example whitelist:
-
-```
-allow 127.0.0.1
-allow 192.168.1.0/24
-allow ::1
-```
-
-### Hardened Example
+### Example Configuration
 
 ```
 listen 0.0.0.0
@@ -156,12 +135,23 @@ connect_port 443
 connect_port 8443
 max_connections_per_ip 16
 allow 192.168.1.0/24
+allow 127.0.0.1
 ```
 
-## Limits
+## Platform Notes
 
-- Maximum 512 concurrent connections (compile-time)
-- 8 KB buffer per direction per connection
+### OpenBSD
+
+- pledge(2) restricts syscalls to `stdio inet dns proc`
+- unveil(2) restricts filesystem to `/etc/resolv.conf` and `/etc/hosts`
+- SO_SPLICE provides zero-copy kernel relay for CONNECT tunnels
+- accept4(2) with SOCK_NONBLOCK avoids extra fcntl(2) per connection
+- Native strlcpy(3), closefrom(2), and strtonum(3)
+
+### Linux and macOS
+
+- POSIX-compatible fallbacks for BSD-specific functions
+- Packages available as `.deb`, `.rpm`, `.apk`, and static binaries
 
 ## License
 

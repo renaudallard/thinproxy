@@ -1,4 +1,4 @@
-.Dd March 18, 2026
+.Dd March 19, 2026
 .Dt THINPROXY 8
 .Os
 .Sh NAME
@@ -19,6 +19,12 @@ It uses non-blocking I/O with
 .Xr poll 2
 for asynchronous event handling and supports both HTTP request forwarding
 and HTTPS tunneling via the CONNECT method.
+.Pp
+On
+.Ox ,
+CONNECT tunnels use
+.Dv SO_SPLICE
+for zero-copy kernel relay, avoiding data copies through userspace.
 .Pp
 The options are as follows:
 .Bl -tag -width Ds
@@ -51,7 +57,12 @@ The default is
 Drop privileges to
 .Ar user
 after binding the listening socket.
-Recommended when binding to privileged ports.
+If the process is already running as
+.Ar user
+(e.g.\& via
+.Xr rc.subr 8
+.Va daemon_user ) ,
+the privilege drop is skipped.
 .It Fl V
 Print version and exit.
 .It Fl v
@@ -78,6 +89,7 @@ are ignored.
 Inline comments starting with
 .Sq #
 are also supported.
+Lines may not exceed 1023 characters.
 .Pp
 The following directives are recognized:
 .Bl -tag -width Ds
@@ -103,13 +115,14 @@ The default is 512.
 .It Cm idle_timeout Ar seconds
 Close connections idle for longer than
 .Ar seconds .
+Must be between 1 and 86400.
 The default is 300.
 .It Cm max_connections_per_ip Ar number
 Maximum concurrent connections from a single source IP address.
+Must be between 1 and 512.
 New connections exceeding this limit are rejected with 503
 Service Unavailable.
 The default is 32.
-Set to 0 to disable.
 .It Cm deny_private Cm yes | no
 Block connections to private and reserved destination addresses.
 This includes RFC 1918 private ranges (10/8, 172.16/12, 192.168/16),
@@ -119,9 +132,6 @@ multicast, and reserved ranges.
 IPv4-mapped IPv6 addresses are also checked.
 The default is
 .Cm yes .
-Set to
-.Cm no
-to allow connections to private addresses.
 .It Cm connect_port Ar port
 Restrict the CONNECT method to the specified
 .Ar port .
@@ -172,6 +182,16 @@ the event loop.
 For HTTPS requests using the CONNECT method, the proxy establishes a
 TCP tunnel to the upstream host and relays data bidirectionally without
 inspecting the encrypted traffic.
+On
+.Ox ,
+the kernel handles the relay via
+.Dv SO_SPLICE
+with zero data copies through userspace.
+.Pp
+On restart, if the listen address is temporarily held by orphaned
+TCP connections, the proxy retries
+.Xr bind 2
+up to five times with one-second intervals.
 .Sh SECURITY
 .Nm
 binds to localhost by default, preventing external access.
@@ -182,6 +202,12 @@ flag or the
 .Cm user
 directive, privileges are dropped immediately after binding the
 listening socket.
+.Pp
+Accepted client sockets are configured with
+.Dv SO_LINGER
+to send RST on close, preventing FIN_WAIT_2 orphans from blocking
+.Xr bind 2
+on restart.
 .Pp
 On
 .Ox ,
@@ -199,6 +225,13 @@ restricts system calls to
 .Nm
 does not inspect, decrypt, or modify HTTPS traffic.
 TLS connections are tunneled opaquely via CONNECT.
+.Sh FILES
+.Bl -tag -width Ds
+.It Pa /etc/thinproxy.conf
+Default configuration file.
+.El
+.Sh EXIT STATUS
+.Ex -std
 .Sh EXAMPLES
 Start on the default address and port:
 .Pp
@@ -229,20 +262,19 @@ listen 0.0.0.0
 port 3128
 user _thinproxy
 daemon yes
+deny_private yes
+connect_port 443
+connect_port 8443
+max_connections_per_ip 16
 allow 192.168.1.0/24
 allow 127.0.0.1
 .Ed
-.Sh FILES
-.Bl -tag -width Ds
-.It Pa /etc/thinproxy.conf
-Default configuration file.
-.El
-.Sh EXIT STATUS
 .Ex -std
 .Sh SEE ALSO
-.Xr curl 1 ,
-.Xr poll 2 ,
 .Xr pledge 2 ,
-.Xr syslog 3
+.Xr poll 2 ,
+.Xr unveil 2 ,
+.Xr syslog 3 ,
+.Xr sosplice 9
 .Sh AUTHORS
 .An Renaud Allard Aq Mt renaud@allard.it
