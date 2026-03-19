@@ -39,6 +39,7 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -52,6 +53,27 @@
 #include <unistd.h>	/* pledge, unveil */
 #endif
 
+#define THINPROXY_VERSION	"0.0.9"
+#define DEFAULT_ADDR		"127.0.0.1"
+#define DEFAULT_PORT		"8080"
+#define DEFAULT_CONFIG		"/etc/thinproxy.conf"
+#define BUF_SIZE		8192
+#define MAX_CONNS		512
+#define MAX_FDS			((MAX_CONNS) * 2 + 16)
+#define MAX_ACL			256
+#define POLL_TIMEOUT		30000	/* milliseconds */
+
+/* ---- portability ---- */
+
+#ifndef __dead
+#if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__NetBSD__) || \
+    defined(__DragonFly__)
+/* provided by <sys/cdefs.h> */
+#else
+#define __dead	__attribute__((__noreturn__))
+#endif
+#endif
+
 #ifndef HAVE_STRLCPY
 #if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__APPLE__) || \
     defined(__NetBSD__) || defined(__DragonFly__)
@@ -62,6 +84,13 @@
 #ifndef HAVE_CLOSEFROM
 #if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__NetBSD__)
 #define HAVE_CLOSEFROM
+#endif
+#endif
+
+#ifndef HAVE_STRTONUM
+#if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__NetBSD__) || \
+    defined(__DragonFly__)
+#define HAVE_STRTONUM
 #endif
 #endif
 
@@ -85,22 +114,39 @@ strlcpy(char *dst, const char *src, size_t dstsize)
 static void
 closefrom(int lowfd)
 {
-	int i;
+	int fd, maxfd;
 
-	for (i = lowfd; i < MAX_FDS; i++)
-		(void)close(i);
+	maxfd = (int)sysconf(_SC_OPEN_MAX);
+	if (maxfd < 0)
+		maxfd = 256;
+	for (fd = lowfd; fd < maxfd; fd++)
+		(void)close(fd);
 }
 #endif
 
-#define THINPROXY_VERSION	"0.0.9"
-#define DEFAULT_ADDR		"127.0.0.1"
-#define DEFAULT_PORT		"8080"
-#define DEFAULT_CONFIG		"/etc/thinproxy.conf"
-#define BUF_SIZE		8192
-#define MAX_CONNS		512
-#define MAX_FDS			((MAX_CONNS) * 2 + 16)
-#define MAX_ACL			256
-#define POLL_TIMEOUT		30000	/* milliseconds */
+#ifndef HAVE_STRTONUM
+static long long
+strtonum(const char *numstr, long long minval, long long maxval,
+    const char **errstrp)
+{
+	long long ll;
+	char *ep;
+
+	errno = 0;
+	ll = strtoll(numstr, &ep, 10);
+	if (numstr == ep || *ep != '\0')
+		*errstrp = "invalid";
+	else if ((ll == LLONG_MIN && errno == ERANGE) || ll < minval)
+		*errstrp = "too small";
+	else if ((ll == LLONG_MAX && errno == ERANGE) || ll > maxval)
+		*errstrp = "too large";
+	else {
+		*errstrp = NULL;
+		return ll;
+	}
+	return 0;
+}
+#endif
 
 #define ERR_400	"HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n"
 #define ERR_403	"HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n"
@@ -384,7 +430,7 @@ acl_add(const char *cidr)
 	slash = strchr(buf, '/');
 	if (slash != NULL) {
 		*slash++ = '\0';
-		e->prefixlen = (int)strtol(slash, NULL, 10);
+		e->prefixlen = (int)strtoll(slash, NULL, 10);
 	} else {
 		e->prefixlen = -1;
 	}
@@ -493,7 +539,7 @@ connect_port_allowed(const char *port)
 	if (nconnect_ports == 0)
 		return 1;
 
-	p = (int)strtol(port, NULL, 10);
+	p = (int)strtoll(port, NULL, 10);
 	for (i = 0; i < nconnect_ports; i++) {
 		if (connect_ports[i] == p)
 			return 1;
@@ -719,21 +765,23 @@ parse_config(const char *path, int must_exist)
 			}
 			vflag = b;
 		} else if (strcasecmp(key, "max_connections") == 0) {
-			int n = (int)strtol(val, NULL, 10);
-			if (n <= 0 || n > MAX_CONNS) {
+			const char *errstr;
+			int n = (int)strtonum(val, 1, MAX_CONNS, &errstr);
+			if (errstr != NULL) {
 				logmsg(LOG_ERR,
-				    "%s:%d: max_connections: 1-%d",
-				    path, lineno, MAX_CONNS);
+				    "%s:%d: max_connections: %s",
+				    path, lineno, errstr);
 				fclose(fp);
 				return -1;
 			}
 			cfg_maxconns = n;
 		} else if (strcasecmp(key, "idle_timeout") == 0) {
-			int n = (int)strtol(val, NULL, 10);
-			if (n <= 0 || n > 86400) {
+			const char *errstr;
+			int n = (int)strtonum(val, 1, 86400, &errstr);
+			if (errstr != NULL) {
 				logmsg(LOG_ERR,
-				    "%s:%d: idle_timeout: 1-86400",
-				    path, lineno);
+				    "%s:%d: idle_timeout: %s",
+				    path, lineno, errstr);
 				fclose(fp);
 				return -1;
 			}
@@ -765,11 +813,12 @@ parse_config(const char *path, int must_exist)
 				return -1;
 			}
 		} else if (strcasecmp(key, "max_connections_per_ip") == 0) {
-			int n = (int)strtol(val, NULL, 10);
-			if (n <= 0 || n > MAX_CONNS) {
+			const char *errstr;
+			int n = (int)strtonum(val, 1, MAX_CONNS, &errstr);
+			if (errstr != NULL) {
 				logmsg(LOG_ERR,
-				    "%s:%d: max_connections_per_ip: 1-%d",
-				    path, lineno, MAX_CONNS);
+				    "%s:%d: max_connections_per_ip: %s",
+				    path, lineno, errstr);
 				fclose(fp);
 				return -1;
 			}
@@ -783,11 +832,12 @@ parse_config(const char *path, int must_exist)
 			cfg_deny_private = b;
 		} else if (strcasecmp(key, "connect_port") == 0) {
 			static int connect_port_seen;
-			int n = (int)strtol(val, NULL, 10);
-			if (n <= 0 || n > 65535) {
+			const char *errstr;
+			int n = (int)strtonum(val, 1, 65535, &errstr);
+			if (errstr != NULL) {
 				logmsg(LOG_ERR,
-				    "%s:%d: invalid port: %s",
-				    path, lineno, val);
+				    "%s:%d: connect_port: %s",
+				    path, lineno, errstr);
 				fclose(fp);
 				return -1;
 			}
@@ -1068,7 +1118,7 @@ build_request(const char *req, size_t reqlen,
 
 /* ---- async DNS resolution ---- */
 
-static void __attribute__((noreturn))
+static void __dead
 dns_child(const char *host, const char *port, int wfd)
 {
 	struct addrinfo hints, *res;
@@ -1792,7 +1842,7 @@ drop_privs(const char *user)
 
 /* ---- main ---- */
 
-static void __attribute__((noreturn))
+static void __dead
 usage(void)
 {
 	fprintf(stderr,
