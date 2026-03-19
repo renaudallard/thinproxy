@@ -1657,6 +1657,7 @@ setup_listener(const char *addr, const char *port)
 		(void)setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
 		    &on, sizeof(on));
 		if (bind(fd, r->ai_addr, r->ai_addrlen) == -1) {
+			err = errno;
 			close(fd);
 			fd = -1;
 			continue;
@@ -1666,7 +1667,8 @@ setup_listener(const char *addr, const char *port)
 	freeaddrinfo(res);
 
 	if (fd == -1) {
-		logmsg(LOG_ERR, "bind %s:%s failed", addr, port);
+		logmsg(LOG_ERR, "bind %s:%s: %s", addr, port,
+		    strerror(err));
 		return -1;
 	}
 

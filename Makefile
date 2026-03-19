@@ -17,12 +17,19 @@ install: thinproxy
 	install -m 755 thinproxy $(DESTDIR)$(BINDIR)/
 	install -d $(DESTDIR)$(MANDIR)/man8
 	install -m 644 thinproxy.8 $(DESTDIR)$(MANDIR)/man8/
-	install -d $(DESTDIR)$(UNITDIR)
-	install -m 644 thinproxy.service $(DESTDIR)$(UNITDIR)/
+	@if [ -d /etc/rc.d ] || echo "$(DESTDIR)" | grep -q .; then \
+		install -d $(DESTDIR)/etc/rc.d; \
+		install -m 755 openbsd/rc.d/thinproxy $(DESTDIR)/etc/rc.d/; \
+	fi
+	@if [ -d /lib/systemd ] || echo "$(DESTDIR)" | grep -q .; then \
+		install -d $(DESTDIR)$(UNITDIR); \
+		install -m 644 thinproxy.service $(DESTDIR)$(UNITDIR)/; \
+	fi
 
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/thinproxy
 	rm -f $(DESTDIR)$(MANDIR)/man8/thinproxy.8
+	rm -f $(DESTDIR)/etc/rc.d/thinproxy
 	rm -f $(DESTDIR)$(UNITDIR)/thinproxy.service
 
 clean:
