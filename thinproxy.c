@@ -24,7 +24,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifndef _DEFAULT_SOURCE
 #define _DEFAULT_SOURCE
+#endif
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -39,7 +41,6 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
-#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -65,68 +66,30 @@
 
 /* ---- portability ---- */
 
-#ifndef __dead
-#if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__NetBSD__) || \
-    defined(__DragonFly__)
-/* provided by <sys/cdefs.h> */
-#else
-#define __dead	__attribute__((__noreturn__))
-#endif
+#ifdef __OpenBSD__
+/* __dead provided by <sys/cdefs.h> */
+#elif !defined(__dead)
+#define __dead	/* empty */
 #endif
 
-#ifndef HAVE_STRLCPY
-#if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__APPLE__) || \
-    defined(__NetBSD__) || defined(__DragonFly__)
-#define HAVE_STRLCPY
-#endif
-#endif
-
-#ifndef HAVE_CLOSEFROM
-#if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__NetBSD__)
-#define HAVE_CLOSEFROM
-#endif
-#endif
-
-#ifndef HAVE_STRTONUM
-#if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__NetBSD__) || \
-    defined(__DragonFly__)
-#define HAVE_STRTONUM
-#endif
-#endif
-
-#ifndef HAVE_STRLCPY
-static size_t
-strlcpy(char *dst, const char *src, size_t dstsize)
-{
-	size_t n;
-
-	for (n = 0; n + 1 < dstsize && src[n] != '\0'; n++)
-		dst[n] = src[n];
-	if (dstsize > 0)
-		dst[n] = '\0';
-	while (src[n] != '\0')
-		n++;
-	return n;
-}
-#endif
-
-#ifndef HAVE_CLOSEFROM
+/*
+ * On non-OpenBSD, provide inline wrappers that use POSIX
+ * equivalents instead of BSD functions, avoiding compat
+ * function conflicts with varying system headers.
+ */
+#ifndef __OpenBSD__
+#undef strlcpy
+#define strlcpy(d, s, n)	(size_t)snprintf((d), (n), "%s", (s))
 static void
-closefrom(int lowfd)
+closefrom_compat(int lowfd)
 {
-	int fd, maxfd;
-
-	maxfd = (int)sysconf(_SC_OPEN_MAX);
-	if (maxfd < 0)
-		maxfd = 256;
-	for (fd = lowfd; fd < maxfd; fd++)
+	int fd;
+	for (fd = lowfd; fd < MAX_FDS; fd++)
 		(void)close(fd);
 }
-#endif
-
-#ifndef HAVE_STRTONUM
+#define closefrom	closefrom_compat
 static long long
-strtonum(const char *numstr, long long minval, long long maxval,
+strtonum_compat(const char *numstr, long long minval, long long maxval,
     const char **errstrp)
 {
 	long long ll;
@@ -136,9 +99,9 @@ strtonum(const char *numstr, long long minval, long long maxval,
 	ll = strtoll(numstr, &ep, 10);
 	if (numstr == ep || *ep != '\0')
 		*errstrp = "invalid";
-	else if ((ll == LLONG_MIN && errno == ERANGE) || ll < minval)
+	else if (ll < minval)
 		*errstrp = "too small";
-	else if ((ll == LLONG_MAX && errno == ERANGE) || ll > maxval)
+	else if (ll > maxval)
 		*errstrp = "too large";
 	else {
 		*errstrp = NULL;
@@ -146,6 +109,7 @@ strtonum(const char *numstr, long long minval, long long maxval,
 	}
 	return 0;
 }
+#define strtonum	strtonum_compat
 #endif
 
 #define ERR_400	"HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n"
@@ -1564,11 +1528,7 @@ accept_conn(int lfd)
 	struct conn *c;
 
 	sl = sizeof(ss);
-#ifdef SOCK_NONBLOCK
-	fd = accept4(lfd, (struct sockaddr *)&ss, &sl, SOCK_NONBLOCK);
-#else
 	fd = accept(lfd, (struct sockaddr *)&ss, &sl);
-#endif
 	if (fd == -1) {
 		if (errno == EMFILE || errno == ENFILE) {
 			logmsg(LOG_ERR, "accept: %s", strerror(errno));
@@ -1600,12 +1560,10 @@ accept_conn(int lfd)
 		return;
 	}
 
-#ifndef SOCK_NONBLOCK
 	if (set_nonblock(fd) == -1) {
 		close(fd);
 		return;
 	}
-#endif
 
 	on = 1;
 	(void)setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
@@ -1865,7 +1823,8 @@ drop_privs(const char *user)
 		return -1;
 	}
 	if (getuid() == pw->pw_uid) {
-		(void)setgid(pw->pw_gid);
+		if (setgid(pw->pw_gid) == -1)
+			logmsg(LOG_WARNING, "setgid: %s", strerror(errno));
 		return 0;
 	}
 	if (setgroups(1, &pw->pw_gid) == -1 ||
