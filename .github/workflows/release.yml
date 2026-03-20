@@ -177,7 +177,7 @@ jobs:
 
       - name: Install tools (apk)
         if: contains(matrix.image, 'alpine')
-        run: apk add build-base git file github-cli
+        run: apk add build-base git file github-cli linux-headers
 
       - name: Checkout
         uses: actions/checkout@v6
@@ -356,7 +356,7 @@ jobs:
         shell: sh
     steps:
       - name: Install tools
-        run: apk add --no-cache git build-base abuild tar sudo github-cli
+        run: apk add --no-cache git build-base abuild tar sudo github-cli linux-headers
 
       - name: Mark workspace safe
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"

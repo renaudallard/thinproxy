@@ -49,7 +49,7 @@ jobs:
       - name: Install build tools (apk)
         if: contains(matrix.image, 'alpine')
         run: |
-          apk add build-base git
+          apk add build-base git linux-headers
 
       - name: Install build tools (zypper)
         if: contains(matrix.image, 'opensuse')
