@@ -71,6 +71,32 @@ jobs:
       - name: Verify binary
         run: ./thinproxy -V
 
+  build-bsd:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: freebsd
+            action: vmactions/freebsd-vm@v1
+          - os: netbsd
+            action: vmactions/netbsd-vm@v1
+          - os: dragonflybsd
+            action: vmactions/dragonflybsd-vm@v1
+    name: ${{ matrix.os }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build in ${{ matrix.os }} VM
+        uses: ${{ matrix.action }}
+        with:
+          usesh: true
+          run: |
+            make
+            ./thinproxy -V
+
   tag-release:
     name: Tag and release on version change
     runs-on: ubuntu-latest
