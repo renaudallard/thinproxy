@@ -1,10 +1,16 @@
+thinproxy (0.1.1-1) unstable; urgency=low
+
+  * Fix SO_SPLICE timeout killing active CONNECT tunnels.
+
+ -- Renaud Allard <renaud@allard.it>  Fri, 20 Mar 2026 00:00:00 +0000
+
 thinproxy (0.1.0-1) unstable; urgency=low
 
   * Linux seccomp-BPF sandboxing.
   * Client IP in verbose request log.
   * FreeBSD, NetBSD, and DragonFlyBSD builds.
 
- -- Renaud Allard <renaud@allard.it>  Thu, 20 Mar 2026 00:00:00 +0000
+ -- Renaud Allard <renaud@allard.it>  Thu, 19 Mar 2026 00:00:00 +0000
 
 thinproxy (0.0.10-1) unstable; urgency=low
 
