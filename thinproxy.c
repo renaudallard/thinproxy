@@ -1216,10 +1216,21 @@ handle_request(struct conn *c)
 	c->is_connect = is_connect;
 	if (vflag) {
 		char logbuf[2048];
+		char peer[INET6_ADDRSTRLEN];
 		size_t li, ln;
 
+		peer[0] = '\0';
+		if (c->peer.ss_family == AF_INET)
+			inet_ntop(AF_INET,
+			    &((struct sockaddr_in *)&c->peer)->sin_addr,
+			    peer, sizeof(peer));
+		else if (c->peer.ss_family == AF_INET6)
+			inet_ntop(AF_INET6,
+			    &((struct sockaddr_in6 *)&c->peer)->sin6_addr,
+			    peer, sizeof(peer));
+
 		ln = (size_t)snprintf(logbuf, sizeof(logbuf),
-		    "%s %s:%s%s", method, host, port,
+		    "%s %s %s:%s%s", peer, method, host, port,
 		    is_connect ? "" : path);
 		if (ln >= sizeof(logbuf))
 			ln = sizeof(logbuf) - 1;
