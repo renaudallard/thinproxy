@@ -222,6 +222,15 @@ and
 restricts system calls to
 .Cm stdio inet dns proc .
 .Pp
+On Linux,
+.Xr seccomp 2
+restricts system calls to an allowlist matching the
+.Ox
+.Xr pledge 2
+promises: I/O, networking, DNS resolution, and process forking.
+Attempts to invoke any other system call terminate the process
+immediately.
+.Pp
 .Nm
 does not inspect, decrypt, or modify HTTPS traffic.
 TLS connections are tunneled opaquely via CONNECT.
@@ -273,6 +282,7 @@ allow 127.0.0.1
 .Sh SEE ALSO
 .Xr pledge 2 ,
 .Xr poll 2 ,
+.Xr seccomp 2 ,
 .Xr unveil 2 ,
 .Xr syslog 3 ,
 .Xr sosplice 9

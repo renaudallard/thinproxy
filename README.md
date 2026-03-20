@@ -16,7 +16,7 @@ Zero dependencies, single file, minimal attack surface.
 - Private/reserved address blocking (SSRF protection)
 - Per-IP connection limits
 - Privilege dropping after bind
-- OpenBSD pledge(2) and unveil(2) sandboxing
+- OpenBSD pledge(2)/unveil(2) and Linux seccomp-BPF sandboxing
 - Automatic bind retry on restart
 - ~25 KB memory per connection
 
@@ -148,10 +148,16 @@ allow 127.0.0.1
 - accept4(2) with SOCK_NONBLOCK avoids extra fcntl(2) per connection
 - Native strlcpy(3), closefrom(2), and strtonum(3)
 
-### Linux and macOS
+### Linux
 
+- seccomp-BPF restricts syscalls to an allowlist (I/O, networking, DNS, process forking)
+- Supports x86_64 and aarch64
 - POSIX-compatible fallbacks for BSD-specific functions
 - Packages available as `.deb`, `.rpm`, `.apk`, and static binaries
+
+### macOS
+
+- POSIX-compatible fallbacks for BSD-specific functions
 
 ## License
 

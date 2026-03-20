@@ -54,6 +54,15 @@
 #include <unistd.h>	/* pledge, unveil */
 #endif
 
+#ifdef __linux__
+#include <stddef.h>
+#include <sys/prctl.h>
+#include <linux/seccomp.h>
+#include <linux/filter.h>
+#include <linux/audit.h>
+#include <sys/syscall.h>
+#endif
+
 #define THINPROXY_VERSION	"0.0.10"
 #define DEFAULT_ADDR		"127.0.0.1"
 #define DEFAULT_PORT		"8080"
@@ -1842,6 +1851,162 @@ drop_privs(const char *user)
 	return 0;
 }
 
+/* ---- seccomp-bpf (Linux) ---- */
+
+#ifdef __linux__
+
+#if defined(__x86_64__)
+#define THINPROXY_AUDIT_ARCH	AUDIT_ARCH_X86_64
+#elif defined(__aarch64__)
+#define THINPROXY_AUDIT_ARCH	AUDIT_ARCH_AARCH64
+#else
+#define THINPROXY_AUDIT_ARCH	0
+#endif
+
+#ifndef SECCOMP_RET_KILL_PROCESS
+#define SECCOMP_RET_KILL_PROCESS	0x80000000U
+#endif
+
+#define SC_ALLOW(nr) \
+	BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, (nr), 0, 1), \
+	BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW)
+
+static int
+setup_seccomp(void)
+{
+#if THINPROXY_AUDIT_ARCH == 0
+	logmsg(LOG_WARNING, "seccomp: unsupported architecture, skipping");
+	return 0;
+#else
+	struct sock_filter filter[] = {
+		/* validate architecture */
+		BPF_STMT(BPF_LD | BPF_W | BPF_ABS,
+		    offsetof(struct seccomp_data, arch)),
+		BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K,
+		    THINPROXY_AUDIT_ARCH, 1, 0),
+		BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL_PROCESS),
+
+		/* load syscall number */
+		BPF_STMT(BPF_LD | BPF_W | BPF_ABS,
+		    offsetof(struct seccomp_data, nr)),
+
+		/* I/O */
+		SC_ALLOW(__NR_read),
+		SC_ALLOW(__NR_write),
+		SC_ALLOW(__NR_writev),
+		SC_ALLOW(__NR_close),
+
+		/* network */
+		SC_ALLOW(__NR_socket),
+		SC_ALLOW(__NR_connect),
+#ifdef __NR_accept
+		SC_ALLOW(__NR_accept),
+#endif
+		SC_ALLOW(__NR_accept4),
+		SC_ALLOW(__NR_setsockopt),
+		SC_ALLOW(__NR_getsockopt),
+		SC_ALLOW(__NR_sendto),
+		SC_ALLOW(__NR_recvfrom),
+		SC_ALLOW(__NR_recvmsg),
+#ifdef __NR_sendmmsg
+		SC_ALLOW(__NR_sendmmsg),
+#endif
+		SC_ALLOW(__NR_bind),
+		SC_ALLOW(__NR_getsockname),
+
+		/* event loop */
+#ifdef __NR_poll
+		SC_ALLOW(__NR_poll),
+#endif
+		SC_ALLOW(__NR_ppoll),
+
+		/* process */
+#ifdef __NR_fork
+		SC_ALLOW(__NR_fork),
+#endif
+		SC_ALLOW(__NR_clone),
+#ifdef __NR_clone3
+		SC_ALLOW(__NR_clone3),
+#endif
+#ifdef __NR_pipe
+		SC_ALLOW(__NR_pipe),
+#endif
+		SC_ALLOW(__NR_pipe2),
+		SC_ALLOW(__NR_exit_group),
+		SC_ALLOW(__NR_wait4),
+
+		/* fd management */
+		SC_ALLOW(__NR_fcntl),
+#ifdef __NR_dup2
+		SC_ALLOW(__NR_dup2),
+#endif
+		SC_ALLOW(__NR_dup3),
+
+		/* fd management (DNS child) */
+		SC_ALLOW(__NR_ioctl),
+		SC_ALLOW(__NR_lseek),
+
+		/* file access (DNS child: /etc/resolv.conf, /etc/hosts) */
+		SC_ALLOW(__NR_openat),
+#ifdef __NR_fstat
+		SC_ALLOW(__NR_fstat),
+#endif
+		SC_ALLOW(__NR_newfstatat),
+#ifdef __NR_faccessat
+		SC_ALLOW(__NR_faccessat),
+#endif
+
+		/* memory */
+		SC_ALLOW(__NR_brk),
+		SC_ALLOW(__NR_mmap),
+		SC_ALLOW(__NR_munmap),
+		SC_ALLOW(__NR_mremap),
+		SC_ALLOW(__NR_mprotect),
+
+		/* signals */
+		SC_ALLOW(__NR_rt_sigaction),
+		SC_ALLOW(__NR_rt_sigreturn),
+		SC_ALLOW(__NR_rt_sigprocmask),
+
+		/* time */
+		SC_ALLOW(__NR_clock_gettime),
+
+		/* glibc/musl internals */
+		SC_ALLOW(__NR_getpid),
+		SC_ALLOW(__NR_futex),
+		SC_ALLOW(__NR_getrandom),
+#ifdef __NR_prlimit64
+		SC_ALLOW(__NR_prlimit64),
+#endif
+#ifdef __NR_set_robust_list
+		SC_ALLOW(__NR_set_robust_list),
+#endif
+#ifdef __NR_rseq
+		SC_ALLOW(__NR_rseq),
+#endif
+
+		/* default deny */
+		BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL_PROCESS),
+	};
+	struct sock_fprog prog = {
+		.len = (unsigned short)(sizeof(filter) / sizeof(filter[0])),
+		.filter = filter,
+	};
+
+	if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == -1) {
+		logmsg(LOG_ERR, "prctl(NO_NEW_PRIVS): %s",
+		    strerror(errno));
+		return -1;
+	}
+	if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &prog) == -1) {
+		logmsg(LOG_ERR, "prctl(SECCOMP): %s", strerror(errno));
+		return -1;
+	}
+	return 0;
+#endif /* THINPROXY_AUDIT_ARCH */
+}
+#endif /* __linux__ */
+
 /* ---- main ---- */
 
 static void __dead
@@ -1944,6 +2109,13 @@ main(int argc, char *argv[])
 	}
 	if (pledge("stdio inet dns proc", NULL) == -1) {
 		logmsg(LOG_ERR, "pledge: %s", strerror(errno));
+		close(lfd);
+		return 1;
+	}
+#endif
+
+#ifdef __linux__
+	if (setup_seccomp() == -1) {
 		close(lfd);
 		return 1;
 	}
