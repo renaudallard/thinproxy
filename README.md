@@ -26,7 +26,7 @@ Zero dependencies, single file, minimal attack surface.
 make
 ```
 
-Builds on OpenBSD, Linux (glibc and musl), macOS, and FreeBSD.
+Builds on OpenBSD, Linux (glibc and musl), macOS, FreeBSD, NetBSD, and DragonFlyBSD.
 
 ## Install
 
@@ -68,7 +68,7 @@ thinproxy [-dVv] [-b address] [-f config] [-p port] [-u user]
 | `-p port` | Listen port (default: `8080`) |
 | `-u user` | Drop privileges to user after bind |
 | `-V` | Print version and exit |
-| `-v` | Verbose logging |
+| `-v` | Log each request with client IP |
 
 Command-line flags override configuration file values.
 
@@ -155,9 +155,10 @@ allow 127.0.0.1
 - POSIX-compatible fallbacks for BSD-specific functions
 - Packages available as `.deb`, `.rpm`, `.apk`, and static binaries
 
-### macOS
+### macOS, FreeBSD, NetBSD, DragonFlyBSD
 
 - POSIX-compatible fallbacks for BSD-specific functions
+- Static binaries available for FreeBSD, NetBSD, and DragonFlyBSD
 
 ## License
 
