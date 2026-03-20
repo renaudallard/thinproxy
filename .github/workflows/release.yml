@@ -219,47 +219,67 @@ jobs:
           gh release upload "$tag" "thinproxy-${tag}-macos-arm64.tar.gz" \
             --repo "${{ github.repository }}" --clobber
 
-  build-bsd:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: freebsd
-            action: vmactions/freebsd-vm@v1
-            suffix: freebsd-amd64
-            flags: "CC=cc LDFLAGS=-static"
-          - os: netbsd
-            action: vmactions/netbsd-vm@v1
-            suffix: netbsd-amd64
-            flags: "CC=cc LDFLAGS=-static"
-          - os: dragonflybsd
-            action: vmactions/dragonflybsd-vm@v1
-            suffix: dragonflybsd-amd64
-            flags: "CC=cc LDFLAGS=-static"
-    name: bsd-${{ matrix.os }}
+  build-freebsd:
+    name: bsd-freebsd
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref }}
-
-      - name: Build in ${{ matrix.os }} VM
-        uses: ${{ matrix.action }}
+      - uses: vmactions/freebsd-vm@v1
         with:
           usesh: true
-          run: |
-            make ${{ matrix.flags }}
-            ./thinproxy -V
-
-      - name: Package and upload
+          run: make CC=cc LDFLAGS=-static && ./thinproxy -V
+      - name: Upload
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag="${{ inputs.release_tag }}"
-          tar czf "thinproxy-${tag}-${{ matrix.suffix }}.tar.gz" \
+          tar czf "thinproxy-${tag}-freebsd-amd64.tar.gz" \
             thinproxy thinproxy.8 thinproxy.conf.example LICENSE README.md
-          gh release upload "$tag" "thinproxy-${tag}-${{ matrix.suffix }}.tar.gz" \
+          gh release upload "$tag" "thinproxy-${tag}-freebsd-amd64.tar.gz" \
+            --repo "${{ github.repository }}" --clobber
+
+  build-netbsd:
+    name: bsd-netbsd
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: vmactions/netbsd-vm@v1
+        with:
+          usesh: true
+          run: make CC=cc LDFLAGS=-static && ./thinproxy -V
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ inputs.release_tag }}"
+          tar czf "thinproxy-${tag}-netbsd-amd64.tar.gz" \
+            thinproxy thinproxy.8 thinproxy.conf.example LICENSE README.md
+          gh release upload "$tag" "thinproxy-${tag}-netbsd-amd64.tar.gz" \
+            --repo "${{ github.repository }}" --clobber
+
+  build-dragonflybsd:
+    name: bsd-dragonflybsd
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: vmactions/dragonflybsd-vm@v1
+        with:
+          usesh: true
+          run: make CC=cc LDFLAGS=-static && ./thinproxy -V
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ inputs.release_tag }}"
+          tar czf "thinproxy-${tag}-dragonflybsd-amd64.tar.gz" \
+            thinproxy thinproxy.8 thinproxy.conf.example LICENSE README.md
+          gh release upload "$tag" "thinproxy-${tag}-dragonflybsd-amd64.tar.gz" \
             --repo "${{ github.repository }}" --clobber
 
   build-deb:
