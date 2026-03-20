@@ -1636,6 +1636,8 @@ reap_timeouts(void)
 			continue;
 		if (c->cfd != fd)
 			continue;
+		if (c->state == S_SPLICED)
+			continue;
 		if (now - c->atime > cfg_timeout) {
 			if (vflag)
 				logmsg(LOG_INFO, "idle timeout");
