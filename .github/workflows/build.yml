@@ -71,6 +71,9 @@ jobs:
       - name: Verify binary
         run: ./thinproxy -V
 
+      - name: Verify seccomp-bpf compiled in
+        run: strings thinproxy | grep -q 'prctl(SECCOMP)'
+
   build-freebsd:
     name: FreeBSD
     runs-on: ubuntu-latest

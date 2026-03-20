@@ -5,7 +5,7 @@ pkgdesc="Lightweight asynchronous HTTP/HTTPS proxy"
 url="https://github.com/renaudallard/thinproxy"
 arch="all"
 license="BSD-2-Clause"
-makedepends="gcc make"
+makedepends="gcc make linux-headers"
 source="$pkgname-$pkgver.tar.gz"
 builddir="$srcdir/$pkgname-$pkgver"
 
@@ -15,6 +15,7 @@ build() {
 
 check() {
 	./thinproxy -V
+	strings thinproxy | grep -q 'prctl(SECCOMP)'
 }
 
 package() {
