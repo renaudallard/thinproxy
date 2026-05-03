@@ -679,6 +679,7 @@ parse_config(const char *path, int must_exist)
 	char line[1024];
 	char *p, *key, *val;
 	int lineno = 0;
+	int connect_port_seen = 0;
 
 	fp = fopen(path, "r");
 	if (fp == NULL) {
@@ -819,7 +820,6 @@ parse_config(const char *path, int must_exist)
 			}
 			cfg_deny_private = b;
 		} else if (strcasecmp(key, "connect_port") == 0) {
-			static int connect_port_seen;
 			const char *errstr;
 			int n = (int)strtonum(val, 1, 65535, &errstr);
 			if (errstr != NULL) {
