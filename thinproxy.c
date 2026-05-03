@@ -1645,8 +1645,10 @@ static void
 event_loop(int lfd)
 {
 	struct {
-		int	fd;
-		short	rev;
+		int		fd;
+		int		type;
+		short		rev;
+		struct conn	*c;
 	} evbuf[MAX_FDS];
 	int nev, ret;
 	nfds_t i;
@@ -1669,13 +1671,27 @@ event_loop(int lfd)
 
 		now = time(NULL);
 
+		/*
+		 * Snapshot the fd, type, conn pointer and revents.
+		 * Capturing the conn pointer lets us re-validate
+		 * identity at dispatch: an earlier event in this
+		 * batch may close a conn and free its fd, after
+		 * which accept_conn() can hand the same fd number
+		 * to a new conn within the same iteration.
+		 */
 		nev = 0;
 		for (i = 0; i < npfds; i++) {
-			if (pfds[i].revents) {
-				evbuf[nev].fd = pfds[i].fd;
-				evbuf[nev].rev = pfds[i].revents;
-				nev++;
-			}
+			int fd;
+			if (!pfds[i].revents)
+				continue;
+			fd = pfds[i].fd;
+			if (fd < 0 || fd >= MAX_FDS)
+				continue;
+			evbuf[nev].fd = fd;
+			evbuf[nev].type = fdtype_arr[fd];
+			evbuf[nev].rev = pfds[i].revents;
+			evbuf[nev].c = fdmap[fd];
+			nev++;
 		}
 
 		for (i = 0; i < (nfds_t)nev; i++) {
@@ -1683,17 +1699,20 @@ event_loop(int lfd)
 			short rev = evbuf[i].rev;
 			struct conn *c;
 
-			if (fd < 0 || fd >= MAX_FDS)
-				continue;
-
-			if (fdtype_arr[fd] == FD_LISTEN) {
+			if (evbuf[i].type == FD_LISTEN) {
+				/* skip if the listen fd has been swapped out */
+				if (fdtype_arr[fd] != FD_LISTEN)
+					continue;
 				if (rev & POLLIN)
 					accept_conn(fd);
 				continue;
 			}
 
 			c = fdmap[fd];
-			if (c == NULL)
+			if (c == NULL || c != evbuf[i].c)
+				continue;
+			/* fd may have been recycled within this conn */
+			if (fdtype_arr[fd] != evbuf[i].type)
 				continue;
 
 			if (rev & POLLNVAL) {
