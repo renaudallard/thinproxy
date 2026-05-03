@@ -29,6 +29,7 @@
 #endif
 
 #include <sys/types.h>
+#include <sys/resource.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
@@ -92,8 +93,14 @@
 static void
 closefrom_compat(int lowfd)
 {
-	int fd;
-	for (fd = lowfd; fd < MAX_FDS; fd++)
+	struct rlimit rl;
+	int fd, hi;
+
+	hi = MAX_FDS;
+	if (getrlimit(RLIMIT_NOFILE, &rl) == 0 &&
+	    rl.rlim_cur != RLIM_INFINITY && (long)rl.rlim_cur > hi)
+		hi = (int)rl.rlim_cur;
+	for (fd = lowfd; fd < hi; fd++)
 		(void)close(fd);
 }
 #define closefrom	closefrom_compat
