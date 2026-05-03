@@ -2083,14 +2083,19 @@ main(int argc, char *argv[])
 	int ch, lfd, i;
 	struct sigaction sa;
 
-	/* pre-scan for -f before config parsing */
-	for (i = 1; i < argc; i++) {
-		if (strcmp(argv[i], "-f") == 0 && i + 1 < argc) {
-			cfgpath = argv[i + 1];
+	/*
+	 * Pre-scan for -f before config parsing.  Use getopt so that
+	 * combined forms like "-vf path" are handled the same as the
+	 * separated "-v -f path".
+	 */
+	opterr = 0;
+	while ((ch = getopt(argc, argv, "b:df:p:u:Vv")) != -1) {
+		if (ch == 'f') {
+			cfgpath = optarg;
 			cfgpath_explicit = 1;
-			break;
 		}
 	}
+	opterr = 1;
 
 	if (parse_config(cfgpath, cfgpath_explicit) == -1)
 		return 1;
