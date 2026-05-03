@@ -689,6 +689,29 @@ parse_bool(const char *val, const char *path, int lineno)
 	return -1;
 }
 
+/*
+ * Reset every cfg_*, ACL, and connect_port slot to its compiled-in
+ * default.  Keeps parse_config idempotent so that a future
+ * SIGHUP-style reload would not cumulate stale state.
+ */
+static void
+config_reset(void)
+{
+	(void)snprintf(cfg_addr, sizeof(cfg_addr), "%s", DEFAULT_ADDR);
+	(void)snprintf(cfg_port, sizeof(cfg_port), "%s", DEFAULT_PORT);
+	cfg_user[0] = '\0';
+	cfg_maxconns = MAX_CONNS;
+	cfg_timeout = 300;
+	cfg_deny_private = 1;
+	cfg_maxconns_per_ip = 32;
+	dflag = 0;
+	vflag = 0;
+	acl_mode = ACL_NONE;
+	nacl = 0;
+	connect_ports[0] = 443;
+	nconnect_ports = 1;
+}
+
 static int
 parse_config(const char *path, int must_exist)
 {
@@ -697,6 +720,8 @@ parse_config(const char *path, int must_exist)
 	char *p, *key, *val;
 	int lineno = 0;
 	int connect_port_seen = 0;
+
+	config_reset();
 
 	fp = fopen(path, "r");
 	if (fp == NULL) {
