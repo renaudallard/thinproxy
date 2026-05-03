@@ -78,6 +78,8 @@
 
 #ifdef __OpenBSD__
 /* __dead provided by <sys/cdefs.h> */
+#elif defined(__GNUC__) || defined(__clang__)
+#define __dead	__attribute__((noreturn))
 #elif !defined(__dead)
 #define __dead	/* empty */
 #endif
