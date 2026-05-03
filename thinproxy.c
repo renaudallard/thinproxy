@@ -1115,8 +1115,12 @@ build_request(const char *req, size_t reqlen,
 			have_te = 1;
 		}
 
+		/* hop-by-hop headers per RFC 7230 sec 6.1 */
 		if (prefix_ci(p, (size_t)(lend - p), "Proxy-Connection:") ||
-		    prefix_ci(p, (size_t)(lend - p), "Proxy-Authorization:")) {
+		    prefix_ci(p, (size_t)(lend - p), "Proxy-Authorization:") ||
+		    prefix_ci(p, (size_t)(lend - p), "Keep-Alive:") ||
+		    prefix_ci(p, (size_t)(lend - p), "Trailer:") ||
+		    prefix_ci(p, (size_t)(lend - p), "Upgrade:")) {
 			p = lend + 2;
 			continue;
 		}
