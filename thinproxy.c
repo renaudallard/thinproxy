@@ -268,6 +268,21 @@ sig_handler(int sig)
 	running = 0;
 }
 
+/*
+ * Monotonic seconds since some unspecified epoch.  Used for idle
+ * timeout accounting so that wall-clock jumps (NTP step, manual
+ * date(1)) cannot cause spurious reaping or indefinite hangs.
+ */
+static time_t
+mono_now(void)
+{
+	struct timespec ts;
+
+	if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0)
+		return ts.tv_sec;
+	return time(NULL);
+}
+
 static int
 set_nonblock(int fd)
 {
@@ -1687,7 +1702,7 @@ event_loop(int lfd)
 	nfds_t i;
 	time_t last_reap;
 
-	now = time(NULL);
+	now = mono_now();
 	last_reap = now;
 
 	while (running) {
@@ -1702,7 +1717,7 @@ event_loop(int lfd)
 			break;
 		}
 
-		now = time(NULL);
+		now = mono_now();
 
 		/*
 		 * Snapshot the fd, type, conn pointer and revents.
