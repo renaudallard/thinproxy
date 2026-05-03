@@ -404,8 +404,14 @@ acl_add(const char *cidr)
 
 	slash = strchr(buf, '/');
 	if (slash != NULL) {
+		const char *errstr;
+
 		*slash++ = '\0';
-		e->prefixlen = (int)strtoll(slash, NULL, 10);
+		e->prefixlen = (int)strtonum(slash, 0, 128, &errstr);
+		if (errstr != NULL) {
+			logmsg(LOG_ERR, "invalid prefix length: %s", cidr);
+			return -1;
+		}
 	} else {
 		e->prefixlen = -1;
 	}
