@@ -402,7 +402,10 @@ jobs:
           rpmbuild --define "_topdir $RPMBUILD_TOPDIR" -bb "$RPMBUILD_TOPDIR/SPECS/thinproxy.spec"
 
       - name: Verify seccomp-bpf compiled in
-        run: strings "$RPMBUILD_TOPDIR"/BUILD/thinproxy-*/thinproxy | grep -q 'prctl(SECCOMP)'
+        run: |
+          rpm=$(find "$RPMBUILD_TOPDIR/RPMS" -name 'thinproxy-[0-9]*.rpm' | head -1)
+          rpm2cpio "$rpm" | cpio -idm --quiet
+          strings ./usr/bin/thinproxy | grep -q 'prctl(SECCOMP)'
 
       - name: Upload RPM
         env:
