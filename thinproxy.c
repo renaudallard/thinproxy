@@ -1559,8 +1559,8 @@ handle_relay_write(struct conn *c, int fd)
 		return;
 
 	nw = write(fd, buf + *off, *len);
-	if (nw == -1) {
-		if (errno != EAGAIN && errno != EINTR)
+	if (nw <= 0) {
+		if (nw == 0 || (errno != EAGAIN && errno != EINTR))
 			conn_close(c);
 		return;
 	}
