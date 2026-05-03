@@ -1,3 +1,18 @@
+thinproxy (0.1.2-1) unstable; urgency=low
+
+  * Reject non-numeric ACL prefix lengths.
+  * Stop forcing RST on accepted client sockets so HTTP error
+    bodies reach the client.
+  * Re-validate identity in event_loop to avoid an fd-reuse race.
+  * Close all inherited fds in DNS child, not just below MAX_FDS.
+  * Reject obs-fold and Transfer-Encoding+Content-Length combinations
+    as request-smuggling vectors.
+  * Treat write()=0 as a closed connection in the relay path.
+  * Bound-check dr.addrlen before passing to connect().
+  * Pre-scan -f with getopt so combined flag forms work.
+
+ -- Renaud Allard <renaud@allard.it>  Sun, 03 May 2026 08:54:01 +0000
+
 thinproxy (0.1.1-1) unstable; urgency=low
 
   * Fix SO_SPLICE timeout killing active CONNECT tunnels.
