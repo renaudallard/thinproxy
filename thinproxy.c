@@ -1332,7 +1332,8 @@ handle_resolving(struct conn *c)
 	close(c->rfd);
 	c->rfd = -1;
 
-	if (nr != (ssize_t)sizeof(dr) || dr.err != 0) {
+	if (nr != (ssize_t)sizeof(dr) || dr.err != 0 ||
+	    dr.addrlen == 0 || dr.addrlen > sizeof(dr.addr)) {
 		logmsg(LOG_WARNING, "DNS resolution failed");
 		ign_write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
 		conn_close(c);
