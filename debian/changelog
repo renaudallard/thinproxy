@@ -1,3 +1,15 @@
+thinproxy (0.1.3-1) unstable; urgency=low
+
+  * Map __dead to noreturn on GCC/Clang.
+  * Use CLOCK_MONOTONIC for idle-timeout accounting so wall-clock
+    jumps no longer affect reaping.
+  * Strip Keep-Alive, Trailer, Upgrade hop-by-hop headers per
+    RFC 7230 sec 6.1.
+  * Reset cfg_* and ACL state at start of parse_config so the
+    function is idempotent.
+
+ -- Renaud Allard <renaud@allard.it>  Sun, 03 May 2026 09:08:48 +0000
+
 thinproxy (0.1.2-1) unstable; urgency=low
 
   * Reject non-numeric ACL prefix lengths.
