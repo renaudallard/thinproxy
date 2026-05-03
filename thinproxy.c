@@ -1016,7 +1016,9 @@ parse_request(const char *req, size_t len,
 /*
  * Build a modified HTTP request for upstream forwarding.
  * Replaces absolute URI with path, adds Connection: close,
- * strips hop-by-hop proxy headers.
+ * strips hop-by-hop proxy headers.  Rejects obs-fold and any
+ * combination of Transfer-Encoding and Content-Length, both of
+ * which are request-smuggling vectors (RFC 7230 sec 3.3.3).
  * Returns bytes written to buf, or -1 on error.
  */
 static ssize_t
@@ -1024,9 +1026,10 @@ build_request(const char *req, size_t reqlen,
     uint8_t *buf, size_t bufsz,
     const char *method, const char *path)
 {
-	const char *p, *end, *lend, *ver;
+	const char *p, *end, *lend, *ver, *colon;
 	size_t n = 0;
 	int have_conn = 0;
+	int have_cl = 0, have_te = 0;
 
 	end = req + reqlen;
 
@@ -1073,6 +1076,26 @@ build_request(const char *req, size_t reqlen,
 				n += rem;
 			}
 			return (ssize_t)n;
+		}
+
+		/* obs-fold: header continuation line, RFC 7230 deprecates */
+		if (*p == ' ' || *p == '\t')
+			return -1;
+
+		/* require a colon in every header line */
+		colon = memchr(p, ':', (size_t)(lend - p));
+		if (colon == NULL || colon == p)
+			return -1;
+
+		if (prefix_ci(p, (size_t)(lend - p), "Content-Length:")) {
+			if (have_cl || have_te)
+				return -1;
+			have_cl = 1;
+		} else if (prefix_ci(p, (size_t)(lend - p),
+		    "Transfer-Encoding:")) {
+			if (have_te || have_cl)
+				return -1;
+			have_te = 1;
 		}
 
 		if (prefix_ci(p, (size_t)(lend - p), "Proxy-Connection:") ||
