@@ -52,7 +52,7 @@ jobs:
                   for line in data.splitlines() + [""]:
                       if not line.strip():
                           if block.get("Supported") == "1" and block.get("Lts") == "1" and "Version" in block:
-                              vers.append(block["Version"])
+                              vers.append(block["Version"].split()[0])
                           block = {}
                           continue
                       if ":" in line:
@@ -70,7 +70,7 @@ jobs:
                   for line in data.splitlines() + [""]:
                       if not line.strip():
                           if block.get("Supported") == "1" and "Version" in block:
-                              vers.append(block["Version"])
+                              vers.append(block["Version"].split()[0])
                           block = {}
                           continue
                       if ":" in line:
