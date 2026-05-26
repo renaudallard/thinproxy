@@ -2075,6 +2075,8 @@ setup_seccomp(void)
 
 		/* glibc/musl internals */
 		SC_ALLOW(__NR_getpid),
+		SC_ALLOW(__NR_gettid),
+		SC_ALLOW(__NR_set_tid_address),
 		SC_ALLOW(__NR_futex),
 		SC_ALLOW(__NR_getrandom),
 #ifdef __NR_prlimit64
