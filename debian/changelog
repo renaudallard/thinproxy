@@ -1,3 +1,10 @@
+thinproxy (0.1.6-1) unstable; urgency=low
+
+  * Allow open(2) in seccomp filter for x86_64 musl DNS resolution.
+  * Log blocked syscall number on seccomp violations.
+
+ -- Renaud Allard <renaud@allard.it>  Mon, 26 May 2026 00:00:00 +0000
+
 thinproxy (0.1.5-1) unstable; urgency=low
 
   * Allow gettid and set_tid_address in seccomp filter so DNS
