@@ -2000,7 +2000,7 @@ seccomp_violation(int sig, siginfo_t *si, void *ctx)
 	while (i > 0)
 		*p++ = digits[--i];
 	*p++ = '\n';
-	(void)write(STDERR_FILENO, buf, (size_t)(p - buf));
+	if (write(STDERR_FILENO, buf, (size_t)(p - buf))) { /* nothing */ }
 	_exit(1);
 }
 
