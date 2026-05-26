@@ -150,7 +150,7 @@ allow 127.0.0.1
 
 ### Linux
 
-- seccomp-BPF restricts syscalls to an allowlist (I/O, networking, DNS, process forking)
+- seccomp-BPF restricts syscalls to an allowlist (I/O, networking, DNS, process forking); violations are logged with the blocked syscall number
 - Supports x86_64 and aarch64
 - POSIX-compatible fallbacks for BSD-specific functions
 - Packages available as `.deb`, `.rpm`, `.apk`, and static binaries

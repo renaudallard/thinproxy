@@ -1380,7 +1380,12 @@ handle_resolving(struct conn *c)
 
 	if (nr != (ssize_t)sizeof(dr) || dr.err != 0 ||
 	    dr.addrlen == 0 || dr.addrlen > sizeof(dr.addr)) {
-		logmsg(LOG_WARNING, "DNS resolution failed");
+		if (nr == 0)
+			logmsg(LOG_WARNING, "DNS child killed");
+		else if (nr != (ssize_t)sizeof(dr))
+			logmsg(LOG_WARNING, "DNS child: short read (%zd)", nr);
+		else
+			logmsg(LOG_WARNING, "DNS resolution failed");
 		ign_write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
 		conn_close(c);
 		return;
@@ -1973,6 +1978,32 @@ drop_privs(const char *user)
 	BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, (nr), 0, 1), \
 	BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW)
 
+static void
+seccomp_violation(int sig, siginfo_t *si, void *ctx)
+{
+	static const char prefix[] = "seccomp: blocked syscall ";
+	char buf[48], digits[12];
+	char *p;
+	unsigned nr;
+	int i;
+
+	(void)sig;
+	(void)ctx;
+	memcpy(buf, prefix, sizeof(prefix) - 1);
+	p = buf + sizeof(prefix) - 1;
+	nr = (unsigned)si->si_syscall;
+	i = 0;
+	do {
+		digits[i++] = '0' + nr % 10;
+		nr /= 10;
+	} while (nr > 0);
+	while (i > 0)
+		*p++ = digits[--i];
+	*p++ = '\n';
+	(void)write(STDERR_FILENO, buf, (size_t)(p - buf));
+	_exit(1);
+}
+
 static int
 setup_seccomp(void)
 {
@@ -1980,6 +2011,7 @@ setup_seccomp(void)
 	logmsg(LOG_WARNING, "seccomp: unsupported architecture, skipping");
 	return 0;
 #else
+	struct sigaction sa_trap;
 	struct sock_filter filter[] = {
 		/* validate architecture */
 		BPF_STMT(BPF_LD | BPF_W | BPF_ABS,
@@ -2049,6 +2081,9 @@ setup_seccomp(void)
 		SC_ALLOW(__NR_lseek),
 
 		/* file access (DNS child: /etc/resolv.conf, /etc/hosts) */
+#ifdef __NR_open
+		SC_ALLOW(__NR_open),
+#endif
 		SC_ALLOW(__NR_openat),
 #ifdef __NR_fstat
 		SC_ALLOW(__NR_fstat),
@@ -2090,12 +2125,21 @@ setup_seccomp(void)
 #endif
 
 		/* default deny */
-		BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL_PROCESS),
+		BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_TRAP),
 	};
 	struct sock_fprog prog = {
 		.len = (unsigned short)(sizeof(filter) / sizeof(filter[0])),
 		.filter = filter,
 	};
+
+	memset(&sa_trap, 0, sizeof(sa_trap));
+	sa_trap.sa_sigaction = seccomp_violation;
+	sa_trap.sa_flags = SA_SIGINFO;
+	sigfillset(&sa_trap.sa_mask);
+	if (sigaction(SIGSYS, &sa_trap, NULL) == -1) {
+		logmsg(LOG_ERR, "sigaction(SIGSYS): %s", strerror(errno));
+		return -1;
+	}
 
 	if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == -1) {
 		logmsg(LOG_ERR, "prctl(NO_NEW_PRIVS): %s",

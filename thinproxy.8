@@ -231,8 +231,8 @@ restricts system calls to an allowlist matching the
 .Ox
 .Xr pledge 2
 promises: I/O, networking, DNS resolution, and process forking.
-Attempts to invoke any other system call terminate the process
-immediately.
+Violations log the blocked syscall number to standard error before
+terminating the process.
 .Pp
 .Nm
 does not inspect, decrypt, or modify HTTPS traffic.
