@@ -68,7 +68,7 @@ thinproxy [-dVv] [-b address] [-f config] [-p port] [-u user]
 | `-p port` | Listen port (default: `8080`) |
 | `-u user` | Drop privileges to user after bind |
 | `-V` | Print version and exit |
-| `-v` | Log each request with client IP |
+| `-v` | Enable all log categories |
 
 Command-line flags override configuration file values.
 
@@ -97,7 +97,8 @@ See `thinproxy.conf.example` for a full example.
 | `port` | Listen port | `8080` |
 | `user` | Drop privileges to user | none |
 | `daemon` | Run as daemon (`yes`/`no`) | `no` |
-| `verbose` | Verbose logging (`yes`/`no`) | `no` |
+| `verbose` | Enable all log categories (`yes`/`no`) | `no` |
+| `log` | Log category (repeatable: `requests`, `denied`, `wildcard`) | `denied` |
 
 ### Limits
 

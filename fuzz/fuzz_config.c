@@ -33,7 +33,7 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 		cfg_timeout = 300;
 		cfg_maxconns_per_ip = 0;
 		cfg_deny_private = 0;
-		vflag = 0;
+		log_flags = 0;
 		dflag = 0;
 		(void)snprintf(cfg_addr, sizeof(cfg_addr), "%s",
 		    DEFAULT_ADDR);

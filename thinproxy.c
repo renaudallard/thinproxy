@@ -64,7 +64,12 @@
 #include <sys/syscall.h>
 #endif
 
-#define THINPROXY_VERSION	"0.1.7"
+#define THINPROXY_VERSION	"0.1.8"
+
+#define LOGF_REQUESTS	0x01
+#define LOGF_DENIED	0x02
+#define LOGF_WILDCARD	0x04
+#define LOGF_ALL	(LOGF_REQUESTS | LOGF_DENIED | LOGF_WILDCARD)
 #define DEFAULT_ADDR		"127.0.0.1"
 #define DEFAULT_PORT		"8080"
 #define DEFAULT_CONFIG		"/etc/thinproxy.conf"
@@ -182,6 +187,8 @@ struct conn {
 	struct sockaddr_storage	peer;	/* client address */
 	enum conn_state	state;
 	int		is_connect;
+	char		dhost[256];	/* destination hostname */
+	char		dport[8];	/* destination port */
 	int		ceof;		/* client EOF received */
 	int		seof;		/* server EOF received */
 
@@ -209,7 +216,7 @@ static int			fd_pidx[MAX_FDS];
 static int			nconns;
 static int			accept_paused;
 static time_t			now;
-static int			vflag;
+static unsigned int		log_flags = LOGF_DENIED;
 static int			dflag;
 static int			use_syslog;
 
@@ -708,7 +715,7 @@ config_reset(void)
 	cfg_deny_private = 1;
 	cfg_maxconns_per_ip = 32;
 	dflag = 0;
-	vflag = 0;
+	log_flags = LOGF_DENIED;
 	acl_mode = ACL_NONE;
 	nacl = 0;
 	connect_ports[0] = 443;
@@ -798,7 +805,21 @@ parse_config(const char *path, int must_exist)
 				fclose(fp);
 				return -1;
 			}
-			vflag = b;
+			log_flags = b ? LOGF_ALL : 0;
+		} else if (strcasecmp(key, "log") == 0) {
+			if (strcasecmp(val, "requests") == 0)
+				log_flags |= LOGF_REQUESTS;
+			else if (strcasecmp(val, "denied") == 0)
+				log_flags |= LOGF_DENIED;
+			else if (strcasecmp(val, "wildcard") == 0)
+				log_flags |= LOGF_WILDCARD;
+			else {
+				logmsg(LOG_ERR,
+				    "%s:%d: unknown log category: %s",
+				    path, lineno, val);
+				fclose(fp);
+				return -1;
+			}
 		} else if (strcasecmp(key, "max_connections") == 0) {
 			const char *errstr;
 			int n = (int)strtonum(val, 1, MAX_CONNS, &errstr);
@@ -1266,6 +1287,19 @@ dns_resolve_start(struct conn *c, const char *host, const char *port)
 
 /* ---- state handlers ---- */
 
+static const char *
+peer_str(struct sockaddr_storage *ss, char *buf, size_t bufsz)
+{
+	buf[0] = '\0';
+	if (ss->ss_family == AF_INET)
+		inet_ntop(AF_INET,
+		    &((struct sockaddr_in *)ss)->sin_addr, buf, bufsz);
+	else if (ss->ss_family == AF_INET6)
+		inet_ntop(AF_INET6,
+		    &((struct sockaddr_in6 *)ss)->sin6_addr, buf, bufsz);
+	return buf;
+}
+
 static void
 handle_request(struct conn *c)
 {
@@ -1305,21 +1339,15 @@ handle_request(struct conn *c)
 	}
 
 	c->is_connect = is_connect;
-	if (vflag) {
+	strlcpy(c->dhost, host, sizeof(c->dhost));
+	strlcpy(c->dport, port, sizeof(c->dport));
+
+	if (log_flags & LOGF_REQUESTS) {
 		char logbuf[2048];
 		char peer[INET6_ADDRSTRLEN];
 		size_t li, ln;
 
-		peer[0] = '\0';
-		if (c->peer.ss_family == AF_INET)
-			inet_ntop(AF_INET,
-			    &((struct sockaddr_in *)&c->peer)->sin_addr,
-			    peer, sizeof(peer));
-		else if (c->peer.ss_family == AF_INET6)
-			inet_ntop(AF_INET6,
-			    &((struct sockaddr_in6 *)&c->peer)->sin6_addr,
-			    peer, sizeof(peer));
-
+		peer_str(&c->peer, peer, sizeof(peer));
 		ln = (size_t)snprintf(logbuf, sizeof(logbuf),
 		    "%s %s %s:%s%s", peer, method, host, port,
 		    is_connect ? "" : path);
@@ -1335,14 +1363,24 @@ handle_request(struct conn *c)
 	if (is_connect) {
 		int prc = connect_port_allowed(port);
 		if (prc == 0) {
-			logmsg(LOG_WARNING, "CONNECT port %s denied", port);
+			if (log_flags & LOGF_DENIED) {
+				char peer[INET6_ADDRSTRLEN];
+				peer_str(&c->peer, peer, sizeof(peer));
+				logmsg(LOG_WARNING,
+				    "%s DENIED %s:%s CONNECT_PORT",
+				    peer, host, port);
+			}
 			ign_write(c->cfd, ERR_403, sizeof(ERR_403) - 1);
 			conn_close(c);
 			return;
 		}
-		if (prc == 2)
+		if (prc == 2 && (log_flags & LOGF_WILDCARD)) {
+			char peer[INET6_ADDRSTRLEN];
+			peer_str(&c->peer, peer, sizeof(peer));
 			logmsg(LOG_WARNING,
-			    "CONNECT port %s allowed (wildcard)", port);
+			    "%s CONNECT %s:%s WILDCARD_PORT",
+			    peer, host, port);
+		}
 	}
 
 	if (!is_connect) {
@@ -1408,7 +1446,13 @@ handle_resolving(struct conn *c)
 
 	if (cfg_deny_private &&
 	    is_private_addr((struct sockaddr *)&dr.addr)) {
-		logmsg(LOG_WARNING, "private address denied");
+		if (log_flags & LOGF_DENIED) {
+			char peer[INET6_ADDRSTRLEN];
+			peer_str(&c->peer, peer, sizeof(peer));
+			logmsg(LOG_WARNING,
+			    "%s DENIED %s:%s PRIVATE_ADDRESS",
+			    peer, c->dhost, c->dport);
+		}
 		ign_write(c->cfd, ERR_403, sizeof(ERR_403) - 1);
 		conn_close(c);
 		return;
@@ -1667,16 +1711,23 @@ accept_conn(int lfd)
 	}
 
 	if (!acl_check((struct sockaddr *)&ss)) {
-		if (vflag)
-			logmsg(LOG_INFO, "denied by ACL");
+		if (log_flags & LOGF_DENIED) {
+			char peer[INET6_ADDRSTRLEN];
+			peer_str(&ss, peer, sizeof(peer));
+			logmsg(LOG_WARNING, "%s DENIED ACL", peer);
+		}
 		ign_write(fd, ERR_403, sizeof(ERR_403) - 1);
 		close(fd);
 		return;
 	}
 
 	if (!per_ip_check((struct sockaddr *)&ss)) {
-		if (vflag)
-			logmsg(LOG_INFO, "per-IP connection limit reached");
+		if (log_flags & LOGF_DENIED) {
+			char peer[INET6_ADDRSTRLEN];
+			peer_str(&ss, peer, sizeof(peer));
+			logmsg(LOG_WARNING, "%s DENIED PER_IP_LIMIT",
+			    peer);
+		}
 		ign_write(fd, ERR_503, sizeof(ERR_503) - 1);
 		close(fd);
 		return;
@@ -1729,8 +1780,17 @@ reap_timeouts(void)
 		if (c->state == S_SPLICED)
 			continue;
 		if (now - c->atime > cfg_timeout) {
-			if (vflag)
-				logmsg(LOG_INFO, "idle timeout");
+			if (log_flags & LOGF_REQUESTS) {
+				char peer[INET6_ADDRSTRLEN];
+				peer_str(&c->peer, peer, sizeof(peer));
+				if (c->dhost[0] != '\0')
+					logmsg(LOG_INFO,
+					    "%s TIMEOUT %s:%s",
+					    peer, c->dhost, c->dport);
+				else
+					logmsg(LOG_INFO,
+					    "%s TIMEOUT", peer);
+			}
 			conn_close(c);
 		}
 	}
@@ -2229,7 +2289,7 @@ main(int argc, char *argv[])
 			fprintf(stderr, "thinproxy %s\n", THINPROXY_VERSION);
 			return 0;
 		case 'v':
-			vflag = 1;
+			log_flags = LOGF_ALL;
 			break;
 		default:
 			usage();

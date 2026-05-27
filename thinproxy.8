@@ -66,8 +66,12 @@ the privilege drop is skipped.
 .It Fl V
 Print version and exit.
 .It Fl v
-Verbose mode.
-Log each proxied request with the client IP address.
+Enable all log categories.
+Equivalent to specifying
+.Cm log requests ,
+.Cm log denied ,
+and
+.Cm log wildcard .
 .El
 .Pp
 Command-line flags override values set in the configuration file.
@@ -106,8 +110,29 @@ Equivalent to
 Equivalent to
 .Fl d .
 .It Cm verbose Cm yes | no
-Equivalent to
+Enable or disable all log categories.
+.Cm yes
+is equivalent to
 .Fl v .
+.It Cm log Ar category
+Enable logging for the specified category.
+May be specified multiple times.
+The following categories are recognized:
+.Bl -tag -width "wildcard" -compact
+.It Cm requests
+Log every proxied request with client IP, method, destination, and path.
+.It Cm denied
+Log denied connections with client IP, destination (when available),
+and denial reason.
+Reasons:
+.Cm ACL ,
+.Cm PER_IP_LIMIT ,
+.Cm CONNECT_PORT ,
+.Cm PRIVATE_ADDRESS .
+Enabled by default.
+.It Cm wildcard
+Log CONNECT requests allowed by the wildcard port rule.
+.El
 .It Cm max_connections Ar number
 Maximum concurrent connections.
 Must be between 1 and 512.
@@ -143,9 +168,9 @@ of
 acts as a wildcard, allowing all ports.
 When combined with explicit port entries, specific ports are checked
 first; the wildcard is used as a fallback.
-Connections allowed by the wildcard are logged at
-.Dv LOG_WARNING
-level to help identify which ports are actually needed.
+Connections allowed by the wildcard are logged when the
+.Cm wildcard
+log category is enabled.
 When any
 .Cm connect_port
 directive is present, CONNECT requests to unlisted ports are denied

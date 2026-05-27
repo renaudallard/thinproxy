@@ -14,8 +14,15 @@ port 8080
 # Run as daemon and log to syslog (default: no)
 #daemon yes
 
-# Verbose logging (default: no)
+# Verbose logging: enables all log categories (default: no)
 #verbose no
+
+# Selective log categories (repeatable, alternative to verbose)
+# requests  - log every request with client IP
+# denied    - log all denials with client IP and reason
+# wildcard  - log wildcard port matches
+#log requests
+#log denied
 
 # Maximum concurrent connections (default: 512, max: 512)
 #max_connections 512
