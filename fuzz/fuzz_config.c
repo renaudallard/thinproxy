@@ -28,6 +28,7 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 		acl_mode = ACL_NONE;
 		nacl = 0;
 		nconnect_ports = 0;
+		connect_port_wildcard = 0;
 		cfg_maxconns = MAX_CONNS;
 		cfg_timeout = 300;
 		cfg_maxconns_per_ip = 0;

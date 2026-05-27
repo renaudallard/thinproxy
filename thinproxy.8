@@ -136,6 +136,16 @@ The default is
 Restrict the CONNECT method to the specified
 .Ar port .
 May be specified multiple times to allow several ports.
+A
+.Ar port
+of
+.Cm 0
+acts as a wildcard, allowing all ports.
+When combined with explicit port entries, specific ports are checked
+first; the wildcard is used as a fallback.
+Connections allowed by the wildcard are logged at
+.Dv LOG_WARNING
+level to help identify which ports are actually needed.
 When any
 .Cm connect_port
 directive is present, CONNECT requests to unlisted ports are denied

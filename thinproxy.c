@@ -231,6 +231,7 @@ static int			nacl;
 #define MAX_CONNECT_PORTS	64
 static int			connect_ports[MAX_CONNECT_PORTS] = { 443 };
 static int			nconnect_ports = 1;
+static int			connect_port_wildcard;
 
 /* forward declarations */
 static void	conn_close(struct conn *);
@@ -533,15 +534,15 @@ acl_check(struct sockaddr *sa)
 }
 
 /*
- * Check if a CONNECT port is allowed.
- * Returns 1 if allowed, 0 if denied.
+ * Check whether a CONNECT port is allowed.
+ * Returns 0 if denied, 1 if explicitly listed, 2 if wildcard.
  */
 static int
 connect_port_allowed(const char *port)
 {
 	int p, i;
 
-	if (nconnect_ports == 0)
+	if (nconnect_ports == 0 && !connect_port_wildcard)
 		return 1;
 
 	p = (int)strtoll(port, NULL, 10);
@@ -549,6 +550,8 @@ connect_port_allowed(const char *port)
 		if (connect_ports[i] == p)
 			return 1;
 	}
+	if (connect_port_wildcard)
+		return 2;
 	return 0;
 }
 
@@ -710,6 +713,7 @@ config_reset(void)
 	nacl = 0;
 	connect_ports[0] = 443;
 	nconnect_ports = 1;
+	connect_port_wildcard = 0;
 }
 
 static int
@@ -863,7 +867,7 @@ parse_config(const char *path, int must_exist)
 			cfg_deny_private = b;
 		} else if (strcasecmp(key, "connect_port") == 0) {
 			const char *errstr;
-			int n = (int)strtonum(val, 1, 65535, &errstr);
+			int n = (int)strtonum(val, 0, 65535, &errstr);
 			if (errstr != NULL) {
 				logmsg(LOG_ERR,
 				    "%s:%d: connect_port: %s",
@@ -873,16 +877,21 @@ parse_config(const char *path, int must_exist)
 			}
 			if (!connect_port_seen) {
 				nconnect_ports = 0;
+				connect_port_wildcard = 0;
 				connect_port_seen = 1;
 			}
-			if (nconnect_ports >= MAX_CONNECT_PORTS) {
-				logmsg(LOG_ERR,
-				    "%s:%d: too many connect_port entries",
-				    path, lineno);
-				fclose(fp);
-				return -1;
+			if (n == 0) {
+				connect_port_wildcard = 1;
+			} else {
+				if (nconnect_ports >= MAX_CONNECT_PORTS) {
+					logmsg(LOG_ERR,
+					    "%s:%d: too many connect_port "
+					    "entries", path, lineno);
+					fclose(fp);
+					return -1;
+				}
+				connect_ports[nconnect_ports++] = n;
 			}
-			connect_ports[nconnect_ports++] = n;
 		} else {
 			logmsg(LOG_ERR, "%s:%d: unknown directive: %s",
 			    path, lineno, key);
@@ -1323,11 +1332,17 @@ handle_request(struct conn *c)
 		logmsg(LOG_INFO, "%s", logbuf);
 	}
 
-	if (is_connect && !connect_port_allowed(port)) {
-		logmsg(LOG_WARNING, "CONNECT port %s denied", port);
-		ign_write(c->cfd, ERR_403, sizeof(ERR_403) - 1);
-		conn_close(c);
-		return;
+	if (is_connect) {
+		int prc = connect_port_allowed(port);
+		if (prc == 0) {
+			logmsg(LOG_WARNING, "CONNECT port %s denied", port);
+			ign_write(c->cfd, ERR_403, sizeof(ERR_403) - 1);
+			conn_close(c);
+			return;
+		}
+		if (prc == 2)
+			logmsg(LOG_WARNING,
+			    "CONNECT port %s allowed (wildcard)", port);
 	}
 
 	if (!is_connect) {

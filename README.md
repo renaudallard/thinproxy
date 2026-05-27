@@ -112,7 +112,7 @@ See `thinproxy.conf.example` for a full example.
 | Directive | Description | Default |
 |-----------|-------------|---------|
 | `deny_private` | Block private/reserved destinations (`yes`/`no`) | `yes` |
-| `connect_port` | Allowed CONNECT port (repeatable) | `443` |
+| `connect_port` | Allowed CONNECT port (repeatable, `0` = wildcard) | `443` |
 | `allow` | Allow source address/CIDR (whitelist mode) | |
 | `deny` | Deny source address/CIDR (blacklist mode) | |
 
