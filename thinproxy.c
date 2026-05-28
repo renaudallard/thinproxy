@@ -702,6 +702,17 @@ is_private_addr(struct sockaddr *sa)
 			memcpy(&v4, b + 12, 4);
 			return is_private_v4(ntohl(v4));
 		}
+		/* RFC 6052 well-known NAT64 prefix 64:ff9b::/96 */
+		if (b[0] == 0x00 && b[1] == 0x64 &&
+		    b[2] == 0xff && b[3] == 0x9b &&
+		    b[4] == 0x00 && b[5] == 0x00 &&
+		    b[6] == 0x00 && b[7] == 0x00 &&
+		    b[8] == 0x00 && b[9] == 0x00 &&
+		    b[10] == 0x00 && b[11] == 0x00) {
+			uint32_t v4;
+			memcpy(&v4, b + 12, 4);
+			return is_private_v4(ntohl(v4));
+		}
 		return 0;
 	}
 
