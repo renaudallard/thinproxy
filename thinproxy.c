@@ -191,6 +191,8 @@ struct conn {
 	char		dport[8];	/* destination port */
 	int		ceof;		/* client EOF received */
 	int		seof;		/* server EOF received */
+	int		cshut;		/* SHUT_WR done on client fd */
+	int		sshut;		/* SHUT_WR done on server fd */
 
 	uint8_t		c2s[BUF_SIZE];	/* client-to-server buffer */
 	size_t		c2s_off;
@@ -1620,6 +1622,15 @@ conn_update_poll(struct conn *c)
 	    c->seof && c->s2c_len == 0) {
 		conn_close(c);
 		return;
+	}
+
+	if (c->ceof && c->c2s_len == 0 && !c->sshut && c->sfd >= 0) {
+		(void)shutdown(c->sfd, SHUT_WR);
+		c->sshut = 1;
+	}
+	if (c->seof && c->s2c_len == 0 && !c->cshut && c->cfd >= 0) {
+		(void)shutdown(c->cfd, SHUT_WR);
+		c->cshut = 1;
 	}
 
 	if (!c->ceof && c->c2s_off + c->c2s_len < BUF_SIZE)
