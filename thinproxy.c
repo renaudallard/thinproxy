@@ -1342,6 +1342,9 @@ handle_request(struct conn *c)
 	strlcpy(c->dhost, host, sizeof(c->dhost));
 	strlcpy(c->dport, port, sizeof(c->dport));
 
+	int prc = is_connect ? connect_port_allowed(port) : 1;
+	int wildcard_hit = (prc == 2 && (log_flags & LOGF_WILDCARD));
+
 	if (log_flags & LOGF_REQUESTS) {
 		char logbuf[2048];
 		char peer[INET6_ADDRSTRLEN];
@@ -1349,8 +1352,9 @@ handle_request(struct conn *c)
 
 		peer_str(&c->peer, peer, sizeof(peer));
 		ln = (size_t)snprintf(logbuf, sizeof(logbuf),
-		    "%s %s %s:%s%s", peer, method, host, port,
-		    is_connect ? "" : path);
+		    "%s %s %s:%s%s%s", peer, method, host, port,
+		    is_connect ? "" : path,
+		    wildcard_hit ? " WILDCARD_PORT" : "");
 		if (ln >= sizeof(logbuf))
 			ln = sizeof(logbuf) - 1;
 		for (li = 0; li < ln; li++) {
@@ -1361,7 +1365,6 @@ handle_request(struct conn *c)
 	}
 
 	if (is_connect) {
-		int prc = connect_port_allowed(port);
 		if (prc == 0) {
 			if (log_flags & LOGF_DENIED) {
 				char peer[INET6_ADDRSTRLEN];
@@ -1374,7 +1377,7 @@ handle_request(struct conn *c)
 			conn_close(c);
 			return;
 		}
-		if (prc == 2 && (log_flags & LOGF_WILDCARD)) {
+		if (wildcard_hit && !(log_flags & LOGF_REQUESTS)) {
 			char peer[INET6_ADDRSTRLEN];
 			peer_str(&c->peer, peer, sizeof(peer));
 			logmsg(LOG_WARNING,
