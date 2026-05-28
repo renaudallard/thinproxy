@@ -1234,7 +1234,18 @@ build_request(const char *req, size_t reqlen,
 			have_cl = 1;
 		} else if (prefix_ci(p, (size_t)(lend - p),
 		    "Transfer-Encoding:")) {
+			const char *v, *vend;
 			if (have_te || have_cl)
+				return -1;
+			v = colon + 1;
+			while (v < lend && (*v == ' ' || *v == '\t'))
+				v++;
+			vend = lend;
+			while (vend > v &&
+			    (vend[-1] == ' ' || vend[-1] == '\t'))
+				vend--;
+			if ((size_t)(vend - v) != 7 ||
+			    strncasecmp(v, "chunked", 7) != 0)
 				return -1;
 			have_te = 1;
 		} else if (prefix_ci(p, (size_t)(lend - p), "Host:")) {
