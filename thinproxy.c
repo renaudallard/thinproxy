@@ -1224,6 +1224,9 @@ build_request(const char *req, size_t reqlen,
 		colon = memchr(p, ':', (size_t)(lend - p));
 		if (colon == NULL || colon == p)
 			return -1;
+		/* RFC 7230 sec 3.2.4 forbids whitespace before the colon */
+		if (colon[-1] == ' ' || colon[-1] == '\t')
+			return -1;
 
 		if (prefix_ci(p, (size_t)(lend - p), "Content-Length:")) {
 			if (have_cl || have_te)
