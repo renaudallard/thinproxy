@@ -1387,6 +1387,23 @@ handle_request(struct conn *c)
 			    "%s CONNECT %s:%s WILDCARD_PORT",
 			    peer, host, port);
 		}
+
+		{
+			const char *body = eoh + 4;
+			size_t body_len =
+			    c->req_len - (size_t)(body - c->req);
+			if (body_len > 0) {
+				if (body_len > sizeof(c->c2s)) {
+					ign_write(c->cfd, ERR_400,
+					    sizeof(ERR_400) - 1);
+					conn_close(c);
+					return;
+				}
+				memcpy(c->c2s, body, body_len);
+				c->c2s_off = 0;
+				c->c2s_len = body_len;
+			}
+		}
 	}
 
 	if (!is_connect) {
@@ -1558,8 +1575,10 @@ handle_response(struct conn *c)
 		/*
 		 * Let the kernel relay the CONNECT tunnel.
 		 * Falls back to userspace relay if splice fails.
+		 * Skip splice when c2s still holds pipelined data -
+		 * the relay path will flush it first.
 		 */
-		{
+		if (c->c2s_len == 0) {
 			struct splice sp;
 			memset(&sp, 0, sizeof(sp));
 			sp.sp_idle.tv_sec = (time_t)cfg_timeout;
@@ -1583,8 +1602,7 @@ handle_response(struct conn *c)
 		}
 #endif
 		c->state = S_RELAY;
-		poll_mod(c->cfd, POLLIN);
-		poll_mod(c->sfd, POLLIN);
+		conn_update_poll(c);
 	}
 }
 
