@@ -2167,6 +2167,7 @@ setup_seccomp(void)
 		SC_ALLOW(__NR_sendto),
 		SC_ALLOW(__NR_recvfrom),
 		SC_ALLOW(__NR_recvmsg),
+		SC_ALLOW(__NR_sendmsg),
 #ifdef __NR_sendmmsg
 		SC_ALLOW(__NR_sendmmsg),
 #endif
