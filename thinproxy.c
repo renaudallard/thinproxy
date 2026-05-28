@@ -731,6 +731,7 @@ parse_config(const char *path, int must_exist)
 	char *p, *key, *val;
 	int lineno = 0;
 	int connect_port_seen = 0;
+	unsigned int log_extra = 0;
 
 	config_reset();
 
@@ -808,11 +809,11 @@ parse_config(const char *path, int must_exist)
 			log_flags = b ? LOGF_ALL : 0;
 		} else if (strcasecmp(key, "log") == 0) {
 			if (strcasecmp(val, "requests") == 0)
-				log_flags |= LOGF_REQUESTS;
+				log_extra |= LOGF_REQUESTS;
 			else if (strcasecmp(val, "denied") == 0)
-				log_flags |= LOGF_DENIED;
+				log_extra |= LOGF_DENIED;
 			else if (strcasecmp(val, "wildcard") == 0)
-				log_flags |= LOGF_WILDCARD;
+				log_extra |= LOGF_WILDCARD;
 			else {
 				logmsg(LOG_ERR,
 				    "%s:%d: unknown log category: %s",
@@ -920,6 +921,8 @@ parse_config(const char *path, int must_exist)
 			return -1;
 		}
 	}
+
+	log_flags |= log_extra;
 
 	fclose(fp);
 	return 0;
