@@ -801,9 +801,9 @@ parse_config(const char *path, int must_exist)
 		lineno++;
 
 		p = strchr(line, '\n');
-		if (p != NULL)
+		if (p != NULL) {
 			*p = '\0';
-		else if (strlen(line) >= sizeof(line) - 1) {
+		} else if (strlen(line) >= sizeof(line) - 1 && !feof(fp)) {
 			logmsg(LOG_ERR, "%s:%d: line too long",
 			    path, lineno);
 			fclose(fp);
