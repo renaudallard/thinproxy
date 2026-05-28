@@ -2564,7 +2564,8 @@ main(int argc, char *argv[])
 	sa.sa_handler = sig_handler;
 	sigemptyset(&sa.sa_mask);
 	if (sigaction(SIGTERM, &sa, NULL) == -1 ||
-	    sigaction(SIGINT, &sa, NULL) == -1) {
+	    sigaction(SIGINT, &sa, NULL) == -1 ||
+	    sigaction(SIGHUP, &sa, NULL) == -1) {
 		logmsg(LOG_ERR, "sigaction: %s", strerror(errno));
 		close(lfd);
 		return 1;
