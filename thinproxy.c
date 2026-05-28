@@ -104,6 +104,15 @@ closefrom_compat(int lowfd)
 	struct rlimit rl;
 	int fd, hi;
 
+#if defined(__linux__) && defined(SYS_close_range)
+	/*
+	 * close_range(2) closes the whole range in one syscall instead
+	 * of looping up to RLIMIT_NOFILE (often ~1M on modern hosts).
+	 */
+	if (syscall(SYS_close_range, (unsigned int)lowfd, ~0U, 0) == 0)
+		return;
+#endif
+
 	hi = MAX_FDS;
 	if (getrlimit(RLIMIT_NOFILE, &rl) == 0 &&
 	    rl.rlim_cur != RLIM_INFINITY && (long)rl.rlim_cur > hi)
@@ -2324,6 +2333,9 @@ setup_seccomp(void)
 		SC_ALLOW(__NR_write),
 		SC_ALLOW(__NR_writev),
 		SC_ALLOW(__NR_close),
+#ifdef __NR_close_range
+		SC_ALLOW(__NR_close_range),
+#endif
 
 		/* network */
 		SC_ALLOW(__NR_socket),
