@@ -1387,7 +1387,12 @@ handle_request(struct conn *c)
 	}
 	c->req_len += (size_t)nr;
 	c->req[c->req_len] = '\0';
-	c->atime = now;
+	/*
+	 * Do not refresh atime while still in S_REQUEST.  A trickle of
+	 * bytes from a slow-loris client would otherwise keep the
+	 * connection alive indefinitely; bounding it to cfg_timeout from
+	 * conn_alloc caps the per-conn header-read window.
+	 */
 
 	eoh = find_eoh(c->req, c->req_len);
 	if (eoh == NULL) {
