@@ -803,11 +803,18 @@ parse_config(const char *path, int must_exist)
 		p = strchr(line, '\n');
 		if (p != NULL) {
 			*p = '\0';
-		} else if (strlen(line) >= sizeof(line) - 1 && !feof(fp)) {
-			logmsg(LOG_ERR, "%s:%d: line too long",
-			    path, lineno);
-			fclose(fp);
-			return -1;
+		} else if (strlen(line) >= sizeof(line) - 1) {
+			/* No newline means fgets filled the buffer. Peek at
+			 * the next byte: if EOF, this was a legitimate
+			 * unterminated final line; otherwise it was truncated. */
+			int c = fgetc(fp);
+			if (c != EOF) {
+				ungetc(c, fp);
+				logmsg(LOG_ERR, "%s:%d: line too long",
+				    path, lineno);
+				fclose(fp);
+				return -1;
+			}
 		}
 
 		p = strchr(line, '#');
