@@ -1205,6 +1205,20 @@ build_request(const char *req, size_t reqlen,
 		if (*p == ' ' || *p == '\t')
 			return -1;
 
+		/* reject embedded control bytes (CR is already absent since
+		 * lend is the first CR; bare LF, NUL etc. would smuggle a
+		 * header line to the upstream).  Allow HTAB. */
+		{
+			const char *q;
+			for (q = p; q < lend; q++) {
+				unsigned char ch = (unsigned char)*q;
+				if (ch == '\t')
+					continue;
+				if (ch < 0x20 || ch == 0x7f)
+					return -1;
+			}
+		}
+
 		/* require a colon in every header line */
 		colon = memchr(p, ':', (size_t)(lend - p));
 		if (colon == NULL || colon == p)
