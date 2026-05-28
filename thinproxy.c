@@ -2221,6 +2221,7 @@ setup_seccomp(void)
 #endif
 		SC_ALLOW(__NR_bind),
 		SC_ALLOW(__NR_getsockname),
+		SC_ALLOW(__NR_shutdown),
 
 		/* event loop */
 #ifdef __NR_poll
