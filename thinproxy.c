@@ -1097,6 +1097,20 @@ parse_request(const char *req, size_t len,
 	if (lend == NULL || lend + 1 >= req + len || lend[1] != '\n')
 		return -1;
 
+	/*
+	 * Refuse any control byte in the entire request line (except SP).
+	 * This catches smuggling attempts via bare LF / NUL / DEL embedded
+	 * in the method, URI, version, or any whitespace between them, in
+	 * one place rather than per-token.
+	 */
+	for (p = req; p < lend; p++) {
+		unsigned char c = (unsigned char)*p;
+		if (c == ' ')
+			continue;
+		if (c < 0x21 || c == 0x7f)
+			return -1;
+	}
+
 	p = memchr(req, ' ', (size_t)(lend - req));
 	if (p == NULL)
 		return -1;
@@ -1153,21 +1167,6 @@ parse_request(const char *req, size_t len,
 	}
 	if (host[0] == '\0')
 		return -1;
-	for (p = method; *p; p++) {
-		unsigned char c = (unsigned char)*p;
-		if (c < 0x21 || c == 0x7f)
-			return -1;
-	}
-	for (p = host; *p; p++) {
-		unsigned char c = (unsigned char)*p;
-		if (c < 0x21 || c == 0x7f)
-			return -1;
-	}
-	for (p = path; *p; p++) {
-		unsigned char c = (unsigned char)*p;
-		if (c < 0x21 || c == 0x7f)
-			return -1;
-	}
 	return 0;
 }
 
