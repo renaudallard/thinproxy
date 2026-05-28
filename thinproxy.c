@@ -1153,6 +1153,7 @@ build_request(const char *req, size_t reqlen,
 	size_t n = 0;
 	int have_conn = 0;
 	int have_cl = 0, have_te = 0;
+	int have_host = 0;
 
 	end = req + reqlen;
 
@@ -1233,6 +1234,10 @@ build_request(const char *req, size_t reqlen,
 			if (have_te || have_cl)
 				return -1;
 			have_te = 1;
+		} else if (prefix_ci(p, (size_t)(lend - p), "Host:")) {
+			if (have_host)
+				return -1;
+			have_host = 1;
 		}
 
 		/* hop-by-hop headers per RFC 7230 sec 6.1 */
