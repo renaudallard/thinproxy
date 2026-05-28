@@ -954,6 +954,17 @@ parse_config(const char *path, int must_exist)
 				fclose(fp);
 				return -1;
 			}
+			if (cfg_nat64_prefix.s6_addr[12] != 0 ||
+			    cfg_nat64_prefix.s6_addr[13] != 0 ||
+			    cfg_nat64_prefix.s6_addr[14] != 0 ||
+			    cfg_nat64_prefix.s6_addr[15] != 0) {
+				logmsg(LOG_ERR,
+				    "%s:%d: nat64_prefix: low 32 bits must "
+				    "be zero for a /96 prefix",
+				    path, lineno);
+				fclose(fp);
+				return -1;
+			}
 			cfg_nat64_set = 1;
 		} else if (strcasecmp(key, "connect_port") == 0) {
 			const char *errstr;
