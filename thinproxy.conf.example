@@ -28,6 +28,7 @@ port 8080
 #max_connections 512
 
 # Maximum concurrent connections per source IP (default: 32)
+# For IPv6 peers, connections are aggregated by /64.
 #max_connections_per_ip 32
 
 # Close idle connections after this many seconds (default: 300)
@@ -35,7 +36,13 @@ port 8080
 
 # Block connections to private/reserved addresses (default: yes)
 # Prevents SSRF by denying RFC 1918, loopback, link-local, etc.
+# IPv4-mapped IPv6 and the well-known NAT64 prefix 64:ff9b::/96 are
+# unwrapped and their embedded IPv4 is also checked.
 #deny_private yes
+
+# Additional NAT64 /96 prefix whose embedded IPv4 should be unwrapped
+# during deny_private checks. The low 32 bits must be zero.
+#nat64_prefix 2001:db8:64::/96
 
 # Restrict CONNECT method to specific ports (default: 443)
 # When set, CONNECT to unlisted ports is denied with 403.

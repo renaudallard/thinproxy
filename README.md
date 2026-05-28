@@ -105,7 +105,7 @@ See `thinproxy.conf.example` for a full example.
 | Directive | Description | Default |
 |-----------|-------------|---------|
 | `max_connections` | Max concurrent connections (1-512) | `512` |
-| `max_connections_per_ip` | Max connections per source IP (1-512) | `32` |
+| `max_connections_per_ip` | Max connections per source IP (1-512); IPv6 peers are aggregated by /64 | `32` |
 | `idle_timeout` | Idle timeout in seconds (1-86400) | `300` |
 
 ### Security
@@ -113,6 +113,7 @@ See `thinproxy.conf.example` for a full example.
 | Directive | Description | Default |
 |-----------|-------------|---------|
 | `deny_private` | Block private/reserved destinations (`yes`/`no`) | `yes` |
+| `nat64_prefix` | Additional NAT64 /96 prefix to unwrap (e.g. `2001:db8:64::/96`) | (well-known `64:ff9b::/96` only) |
 | `connect_port` | Allowed CONNECT port (repeatable, `0` = wildcard) | `443` |
 | `allow` | Allow source address/CIDR (whitelist mode) | |
 | `deny` | Deny source address/CIDR (blacklist mode) | |
@@ -138,6 +139,24 @@ max_connections_per_ip 16
 allow 192.168.1.0/24
 allow 127.0.0.1
 ```
+
+## Signals
+
+`SIGTERM`, `SIGINT`, and `SIGHUP` all trigger a clean shutdown.
+The daemon does not reload its configuration on `SIGHUP`; restart it to
+pick up changes. `SIGPIPE` and `SIGCHLD` are ignored.
+
+## Request Smuggling Defenses
+
+Requests are rejected with `400 Bad Request` if they contain:
+
+- Control bytes (other than SP) anywhere in the request line
+- Control bytes other than HTAB inside any header line
+- Whitespace between a header name and its colon
+- Obsolete header line folding (obs-fold)
+- Duplicate `Host`, `Content-Length`, or `Transfer-Encoding` headers
+- A `Transfer-Encoding` value other than `chunked`
+- Both `Transfer-Encoding` and `Content-Length` together
 
 ## Platform Notes
 

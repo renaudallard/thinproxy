@@ -1,4 +1,4 @@
-.Dd May 3, 2026
+.Dd May 28, 2026
 .Dt THINPROXY 8
 .Os
 .Sh NAME
@@ -144,6 +144,9 @@ Must be between 1 and 86400.
 The default is 300.
 .It Cm max_connections_per_ip Ar number
 Maximum concurrent connections from a single source IP address.
+For IPv6 peers, connections are aggregated by the leading /64 so that a
+single host cannot trivially bypass the limit by varying the low 64 bits
+of its address.
 Must be between 1 and 512.
 New connections exceeding this limit are rejected with 503
 Service Unavailable.
@@ -154,9 +157,21 @@ This includes RFC 1918 private ranges (10/8, 172.16/12, 192.168/16),
 loopback (127/8, ::1), link-local (169.254/16, fe80::/10),
 shared address space (100.64/10), unique local IPv6 (fc00::/7),
 multicast, and reserved ranges.
-IPv4-mapped IPv6 addresses are also checked.
+IPv4-mapped IPv6 addresses and the RFC 6052 well-known NAT64 prefix
+.Pa 64:ff9b::/96
+are also checked.
 The default is
 .Cm yes .
+.It Cm nat64_prefix Ar addr/96
+Additional NAT64 /96 prefix whose embedded IPv4 address should be
+unwrapped during
+.Cm deny_private
+checks.
+Use this when the local network operates its own NAT64 with a custom
+prefix in addition to (or instead of) the well-known one.
+The low 32 bits of
+.Ar addr
+must be zero.
 .It Cm connect_port Ar port
 Restrict the CONNECT method to the specified
 .Ar port .
@@ -205,19 +220,30 @@ Cannot be mixed with
 .Sh OPERATION
 For HTTP requests, the proxy rewrites the absolute URI to a relative
 path, strips hop-by-hop headers
-.Pq Proxy-Connection, Proxy-Authorization ,
+.Pq Proxy-Connection, Proxy-Authorization, Keep-Alive, Trailer, Upgrade ,
 forces
 .Cm Connection: close ,
 and forwards the request to the upstream server.
-Requests carrying both
+The following constructs are HTTP request-smuggling vectors and are
+rejected with
+.Cm 400 Bad Request :
+control bytes (other than SP) anywhere in the request line; control
+bytes other than HTAB inside any header line; whitespace between a
+header name and its colon; obsolete line folding
+.Pq obs-fold ;
+duplicate
+.Cm Host ,
+.Cm Content-Length ,
+or
+.Cm Transfer-Encoding
+headers; a
+.Cm Transfer-Encoding
+value other than
+.Cm chunked ;
+and any request that carries both
 .Cm Transfer-Encoding
 and
-.Cm Content-Length ,
-duplicate framing headers, or obsolete header continuation lines
-.Pq obs-fold
-are rejected with
-.Cm 400 Bad Request ,
-since these constructs are HTTP request-smuggling vectors.
+.Cm Content-Length .
 .Pp
 DNS resolution is performed asynchronously by forking a short-lived
 child process for each lookup, preventing slow responses from blocking
@@ -272,6 +298,18 @@ terminating the process.
 .Nm
 does not inspect, decrypt, or modify HTTPS traffic.
 TLS connections are tunneled opaquely via CONNECT.
+.Sh SIGNALS
+.Bl -tag -width "SIGTERM, SIGINT, SIGHUP"
+.It Dv SIGTERM , Dv SIGINT , Dv SIGHUP
+Shut down cleanly: the event loop finishes the current iteration and
+the listener and any active connections are closed.
+.Nm
+does not reload its configuration on
+.Dv SIGHUP ;
+restart the daemon to pick up changes.
+.It Dv SIGPIPE , Dv SIGCHLD
+Ignored.
+.El
 .Sh FILES
 .Bl -tag -width Ds
 .It Pa /etc/thinproxy.conf
