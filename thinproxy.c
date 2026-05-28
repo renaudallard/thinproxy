@@ -1454,6 +1454,8 @@ handle_resolving(struct conn *c)
 		return;
 	}
 
+	c->atime = now;
+
 	poll_del(c->rfd);
 	close(c->rfd);
 	c->rfd = -1;
