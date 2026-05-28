@@ -613,7 +613,9 @@ per_ip_check(struct sockaddr *sa)
 			struct sockaddr_in6 *a = (struct sockaddr_in6 *)sa;
 			struct sockaddr_in6 *b =
 			    (struct sockaddr_in6 *)&c->peer;
-			if (memcmp(&a->sin6_addr, &b->sin6_addr, 16) == 0)
+			/* aggregate by /64 - a single host typically
+			 * controls at least that much address space */
+			if (memcmp(&a->sin6_addr, &b->sin6_addr, 8) == 0)
 				count++;
 		}
 		if (count >= cfg_maxconns_per_ip)
