@@ -1107,6 +1107,21 @@ parse_request(const char *req, size_t len,
 	}
 	if (host[0] == '\0')
 		return -1;
+	for (p = method; *p; p++) {
+		unsigned char c = (unsigned char)*p;
+		if (c < 0x21 || c == 0x7f)
+			return -1;
+	}
+	for (p = host; *p; p++) {
+		unsigned char c = (unsigned char)*p;
+		if (c < 0x21 || c == 0x7f)
+			return -1;
+	}
+	for (p = path; *p; p++) {
+		unsigned char c = (unsigned char)*p;
+		if (c < 0x21 || c == 0x7f)
+			return -1;
+	}
 	return 0;
 }
 
