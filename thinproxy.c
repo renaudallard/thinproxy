@@ -842,10 +842,31 @@ parse_config(const char *path, int must_exist)
 		}
 
 		if (strcasecmp(key, "listen") == 0) {
+			if (strlen(val) >= sizeof(cfg_addr)) {
+				logmsg(LOG_ERR,
+				    "%s:%d: listen: value too long",
+				    path, lineno);
+				fclose(fp);
+				return -1;
+			}
 			strlcpy(cfg_addr, val, sizeof(cfg_addr));
 		} else if (strcasecmp(key, "port") == 0) {
+			if (strlen(val) >= sizeof(cfg_port)) {
+				logmsg(LOG_ERR,
+				    "%s:%d: port: value too long",
+				    path, lineno);
+				fclose(fp);
+				return -1;
+			}
 			strlcpy(cfg_port, val, sizeof(cfg_port));
 		} else if (strcasecmp(key, "user") == 0) {
+			if (strlen(val) >= sizeof(cfg_user)) {
+				logmsg(LOG_ERR,
+				    "%s:%d: user: value too long",
+				    path, lineno);
+				fclose(fp);
+				return -1;
+			}
 			strlcpy(cfg_user, val, sizeof(cfg_user));
 		} else if (strcasecmp(key, "daemon") == 0) {
 			int b = parse_bool(val, path, lineno);
@@ -2513,6 +2534,10 @@ main(int argc, char *argv[])
 	while ((ch = getopt(argc, argv, "b:df:p:u:Vv")) != -1) {
 		switch (ch) {
 		case 'b':
+			if (strlen(optarg) >= sizeof(cfg_addr)) {
+				logmsg(LOG_ERR, "-b: value too long");
+				return 1;
+			}
 			strlcpy(cfg_addr, optarg, sizeof(cfg_addr));
 			break;
 		case 'd':
@@ -2521,9 +2546,17 @@ main(int argc, char *argv[])
 		case 'f':
 			break;
 		case 'p':
+			if (strlen(optarg) >= sizeof(cfg_port)) {
+				logmsg(LOG_ERR, "-p: value too long");
+				return 1;
+			}
 			strlcpy(cfg_port, optarg, sizeof(cfg_port));
 			break;
 		case 'u':
+			if (strlen(optarg) >= sizeof(cfg_user)) {
+				logmsg(LOG_ERR, "-u: value too long");
+				return 1;
+			}
 			strlcpy(cfg_user, optarg, sizeof(cfg_user));
 			break;
 		case 'V':
