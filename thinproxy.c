@@ -2059,14 +2059,25 @@ drop_privs(const char *user)
 		return -1;
 	}
 	if (getuid() == pw->pw_uid) {
-		if (setgid(pw->pw_gid) == -1)
-			logmsg(LOG_WARNING, "setgid: %s", strerror(errno));
+		if (setgid(pw->pw_gid) == -1) {
+			logmsg(LOG_ERR, "setgid: %s", strerror(errno));
+			return -1;
+		}
+		if (getgid() != pw->pw_gid || getegid() != pw->pw_gid) {
+			logmsg(LOG_ERR, "setgid: not applied");
+			return -1;
+		}
 		return 0;
 	}
 	if (setgroups(1, &pw->pw_gid) == -1 ||
 	    setgid(pw->pw_gid) == -1 ||
 	    setuid(pw->pw_uid) == -1) {
 		logmsg(LOG_ERR, "setuid: %s", strerror(errno));
+		return -1;
+	}
+	if (getuid() != pw->pw_uid || geteuid() != pw->pw_uid ||
+	    getgid() != pw->pw_gid || getegid() != pw->pw_gid) {
+		logmsg(LOG_ERR, "drop_privs: identity not changed");
 		return -1;
 	}
 	return 0;
