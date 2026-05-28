@@ -2171,9 +2171,14 @@ drop_privs(const char *user)
 		return -1;
 	}
 	if (getuid() == pw->pw_uid) {
-		if (setgroups(1, &pw->pw_gid) == -1 && errno != EPERM) {
-			logmsg(LOG_ERR, "setgroups: %s", strerror(errno));
-			return -1;
+		int sg_eperm = 0;
+		if (setgroups(1, &pw->pw_gid) == -1) {
+			if (errno != EPERM) {
+				logmsg(LOG_ERR, "setgroups: %s",
+				    strerror(errno));
+				return -1;
+			}
+			sg_eperm = 1;
 		}
 		if (setgid(pw->pw_gid) == -1) {
 			logmsg(LOG_ERR, "setgid: %s", strerror(errno));
@@ -2183,6 +2188,14 @@ drop_privs(const char *user)
 		    geteuid() != pw->pw_uid) {
 			logmsg(LOG_ERR, "drop_privs: identity not applied");
 			return -1;
+		}
+		if (sg_eperm) {
+			int ng = getgroups(0, NULL);
+			if (ng > 1)
+				logmsg(LOG_WARNING,
+				    "drop_privs: %d supplementary group(s) "
+				    "could not be cleared (no privilege to "
+				    "call setgroups)", ng);
 		}
 		return 0;
 	}
