@@ -48,6 +48,7 @@
 #include <syslog.h>
 #include <time.h>
 #include <ctype.h>
+#include <locale.h>
 #include <pwd.h>
 #include <grp.h>
 
@@ -2470,6 +2471,13 @@ main(int argc, char *argv[])
 	int cfgpath_explicit = 0;
 	int ch, lfd, i;
 	struct sigaction sa;
+
+	/*
+	 * Pin the C locale so that case-insensitive header matching via
+	 * strcasecmp/strncasecmp is not affected by the environment (e.g.
+	 * Turkish locale where 'I' is not the case-fold of 'i').
+	 */
+	setlocale(LC_ALL, "C");
 
 	/*
 	 * Pre-scan for -f before config parsing.  Use getopt so that
