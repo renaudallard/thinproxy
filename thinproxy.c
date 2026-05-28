@@ -1522,12 +1522,6 @@ handle_request(struct conn *c)
 			size_t body_len =
 			    c->req_len - (size_t)(body - c->req);
 			if (body_len > 0) {
-				if (body_len > sizeof(c->c2s)) {
-					ign_write(c->cfd, ERR_400,
-					    sizeof(ERR_400) - 1);
-					conn_close(c);
-					return;
-				}
 				memcpy(c->c2s, body, body_len);
 				c->c2s_off = 0;
 				c->c2s_len = body_len;
