@@ -271,6 +271,24 @@ logmsg(int pri, const char *fmt, ...)
 	va_end(ap);
 }
 
+/*
+ * Copy src into dst replacing any byte outside printable ASCII (0x20-0x7e)
+ * with '?'.  Guarantees NUL termination as long as dstsz > 0.
+ */
+static void
+sanitize_str(char *dst, size_t dstsz, const char *src)
+{
+	size_t i;
+
+	if (dstsz == 0)
+		return;
+	for (i = 0; i + 1 < dstsz && src[i] != '\0'; i++) {
+		unsigned char ch = (unsigned char)src[i];
+		dst[i] = (ch < 0x20 || ch >= 0x7f) ? '?' : (char)ch;
+	}
+	dst[i] = '\0';
+}
+
 static void
 sig_handler(int sig)
 {
@@ -1375,10 +1393,14 @@ handle_request(struct conn *c)
 		if (prc == 0) {
 			if (log_flags & LOGF_DENIED) {
 				char peer[INET6_ADDRSTRLEN];
+				char shost[sizeof(c->dhost)];
+				char sport[sizeof(c->dport)];
 				peer_str(&c->peer, peer, sizeof(peer));
+				sanitize_str(shost, sizeof(shost), host);
+				sanitize_str(sport, sizeof(sport), port);
 				logmsg(LOG_WARNING,
 				    "%s DENIED %s:%s CONNECT_PORT",
-				    peer, host, port);
+				    peer, shost, sport);
 			}
 			ign_write(c->cfd, ERR_403, sizeof(ERR_403) - 1);
 			conn_close(c);
@@ -1386,10 +1408,14 @@ handle_request(struct conn *c)
 		}
 		if (wildcard_hit && !(log_flags & LOGF_REQUESTS)) {
 			char peer[INET6_ADDRSTRLEN];
+			char shost[sizeof(c->dhost)];
+			char sport[sizeof(c->dport)];
 			peer_str(&c->peer, peer, sizeof(peer));
+			sanitize_str(shost, sizeof(shost), host);
+			sanitize_str(sport, sizeof(sport), port);
 			logmsg(LOG_WARNING,
 			    "%s CONNECT %s:%s WILDCARD_PORT",
-			    peer, host, port);
+			    peer, shost, sport);
 		}
 
 		{
@@ -1424,7 +1450,11 @@ handle_request(struct conn *c)
 	}
 
 	if (dns_resolve_start(c, host, port) == -1) {
-		logmsg(LOG_WARNING, "resolve %s:%s failed", host, port);
+		char shost[sizeof(c->dhost)];
+		char sport[sizeof(c->dport)];
+		sanitize_str(shost, sizeof(shost), host);
+		sanitize_str(sport, sizeof(sport), port);
+		logmsg(LOG_WARNING, "resolve %s:%s failed", shost, sport);
 		ign_write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
 		conn_close(c);
 		return;
@@ -1477,10 +1507,14 @@ handle_resolving(struct conn *c)
 	    is_private_addr((struct sockaddr *)&dr.addr)) {
 		if (log_flags & LOGF_DENIED) {
 			char peer[INET6_ADDRSTRLEN];
+			char shost[sizeof(c->dhost)];
+			char sport[sizeof(c->dport)];
 			peer_str(&c->peer, peer, sizeof(peer));
+			sanitize_str(shost, sizeof(shost), c->dhost);
+			sanitize_str(sport, sizeof(sport), c->dport);
 			logmsg(LOG_WARNING,
 			    "%s DENIED %s:%s PRIVATE_ADDRESS",
-			    peer, c->dhost, c->dport);
+			    peer, shost, sport);
 		}
 		ign_write(c->cfd, ERR_403, sizeof(ERR_403) - 1);
 		conn_close(c);
@@ -1821,14 +1855,21 @@ reap_timeouts(void)
 		if (now - c->atime > cfg_timeout) {
 			if (log_flags & LOGF_REQUESTS) {
 				char peer[INET6_ADDRSTRLEN];
+				char shost[sizeof(c->dhost)];
+				char sport[sizeof(c->dport)];
 				peer_str(&c->peer, peer, sizeof(peer));
-				if (c->dhost[0] != '\0')
+				if (c->dhost[0] != '\0') {
+					sanitize_str(shost, sizeof(shost),
+					    c->dhost);
+					sanitize_str(sport, sizeof(sport),
+					    c->dport);
 					logmsg(LOG_INFO,
 					    "%s TIMEOUT %s:%s",
-					    peer, c->dhost, c->dport);
-				else
+					    peer, shost, sport);
+				} else {
 					logmsg(LOG_INFO,
 					    "%s TIMEOUT", peer);
+				}
 			}
 			conn_close(c);
 		}
