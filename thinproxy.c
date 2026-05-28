@@ -1844,6 +1844,13 @@ reap_timeouts(void)
 {
 	int fd;
 
+	/*
+	 * Periodically retry accept after EMFILE/ENFILE.  Without a live
+	 * conn close, accept_paused would never clear and the listener
+	 * could stay wedged after external fd pressure subsides.
+	 */
+	accept_paused = 0;
+
 	for (fd = 0; fd < MAX_FDS; fd++) {
 		struct conn *c = fdmap[fd];
 		if (c == NULL || fdtype_arr[fd] == FD_LISTEN)
