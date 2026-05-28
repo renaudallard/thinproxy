@@ -230,6 +230,8 @@ static int			cfg_maxconns = MAX_CONNS;
 static int			cfg_timeout = 300;
 static int			cfg_deny_private = 1;
 static int			cfg_maxconns_per_ip = 32;
+static struct in6_addr		cfg_nat64_prefix;
+static int			cfg_nat64_set;
 
 /* ACL */
 static enum acl_mode		acl_mode;
@@ -713,6 +715,13 @@ is_private_addr(struct sockaddr *sa)
 			memcpy(&v4, b + 12, 4);
 			return is_private_v4(ntohl(v4));
 		}
+		/* operator-configured NAT64 /96 prefix */
+		if (cfg_nat64_set &&
+		    memcmp(b, &cfg_nat64_prefix, 12) == 0) {
+			uint32_t v4;
+			memcpy(&v4, b + 12, 4);
+			return is_private_v4(ntohl(v4));
+		}
 		return 0;
 	}
 
@@ -747,6 +756,8 @@ config_reset(void)
 	cfg_timeout = 300;
 	cfg_deny_private = 1;
 	cfg_maxconns_per_ip = 32;
+	memset(&cfg_nat64_prefix, 0, sizeof(cfg_nat64_prefix));
+	cfg_nat64_set = 0;
 	dflag = 0;
 	log_flags = LOGF_DENIED;
 	acl_mode = ACL_NONE;
@@ -920,6 +931,30 @@ parse_config(const char *path, int must_exist)
 				return -1;
 			}
 			cfg_deny_private = b;
+		} else if (strcasecmp(key, "nat64_prefix") == 0) {
+			char addr[INET6_ADDRSTRLEN];
+			const char *slash = strchr(val, '/');
+			size_t alen = slash ? (size_t)(slash - val)
+			    : strlen(val);
+			if (alen == 0 || alen >= sizeof(addr) ||
+			    (slash != NULL && strcmp(slash, "/96") != 0)) {
+				logmsg(LOG_ERR,
+				    "%s:%d: nat64_prefix: expected addr/96",
+				    path, lineno);
+				fclose(fp);
+				return -1;
+			}
+			memcpy(addr, val, alen);
+			addr[alen] = '\0';
+			if (inet_pton(AF_INET6, addr,
+			    &cfg_nat64_prefix) != 1) {
+				logmsg(LOG_ERR,
+				    "%s:%d: nat64_prefix: invalid address: %s",
+				    path, lineno, addr);
+				fclose(fp);
+				return -1;
+			}
+			cfg_nat64_set = 1;
 		} else if (strcasecmp(key, "connect_port") == 0) {
 			const char *errstr;
 			int n = (int)strtonum(val, 0, 65535, &errstr);
