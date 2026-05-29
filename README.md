@@ -162,6 +162,7 @@ pick up changes. `SIGPIPE` and `SIGCHLD` are ignored.
 Requests are rejected with `400 Bad Request` if they contain:
 
 - Control bytes (other than SP) anywhere in the request line
+- Whitespace inside the request-target
 - Control bytes other than HTAB inside any header line
 - Whitespace between a header name and its colon
 - Obsolete header line folding (obs-fold)

@@ -258,9 +258,9 @@ and forwards the request to the upstream server.
 The following constructs are HTTP request-smuggling vectors and are
 rejected with
 .Cm 400 Bad Request :
-control bytes (other than SP) anywhere in the request line; control
-bytes other than HTAB inside any header line; whitespace between a
-header name and its colon; obsolete line folding
+control bytes (other than SP) anywhere in the request line; whitespace
+inside the request-target; control bytes other than HTAB inside any
+header line; whitespace between a header name and its colon; obsolete line folding
 .Pq obs-fold ;
 duplicate
 .Cm Host ,

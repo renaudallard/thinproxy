@@ -1204,6 +1204,17 @@ parse_request(const char *req, size_t len,
 	if (uend == NULL || uend == ustart)
 		return -1;
 
+	/*
+	 * RFC 7230 sec 3.1.1: the request-target carries no whitespace.
+	 * ustart..uend is delimited only by the first and last SP on the
+	 * line, so an interior space would otherwise be forwarded verbatim
+	 * and create a first-space/last-space parser differential with the
+	 * upstream.  Reject it here.
+	 */
+	for (p = ustart; p < uend; p++)
+		if (*p == ' ')
+			return -1;
+
 	*is_connect = (strcasecmp(method, "CONNECT") == 0);
 
 	if (*is_connect) {
