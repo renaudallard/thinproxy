@@ -2563,7 +2563,15 @@ main(int argc, char *argv[])
 	if (parse_config(cfgpath, cfgpath_explicit) == -1)
 		return 1;
 
-	/* CLI overrides config */
+	/*
+	 * CLI overrides config: restart getopt for a second scan.  BSD
+	 * getopt(3) requires optreset in addition to optind; the GNU and
+	 * musl libcs restart on optind alone.
+	 */
+#if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__NetBSD__) || \
+    defined(__DragonFly__) || defined(__APPLE__)
+	optreset = 1;
+#endif
 	optind = 1;
 	while ((ch = getopt(argc, argv, "b:df:p:u:Vv")) != -1) {
 		switch (ch) {
