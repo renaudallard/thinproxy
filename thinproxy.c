@@ -734,6 +734,25 @@ is_private_addr(struct sockaddr *sa)
 			memcpy(&v4, b + 12, 4);
 			return is_private_v4(ntohl(v4));
 		}
+		/*
+		 * IPv4-compatible ::a.b.c.d (deprecated, RFC 4291).  Loopback
+		 * and the unspecified address are already handled above, so a
+		 * zero high 96 bits here embeds a routable IPv4 destination.
+		 */
+		if (b[0] == 0x00 && b[1] == 0x00 && b[2] == 0x00 &&
+		    b[3] == 0x00 && b[4] == 0x00 && b[5] == 0x00 &&
+		    b[6] == 0x00 && b[7] == 0x00 && b[8] == 0x00 &&
+		    b[9] == 0x00 && b[10] == 0x00 && b[11] == 0x00) {
+			uint32_t v4;
+			memcpy(&v4, b + 12, 4);
+			return is_private_v4(ntohl(v4));
+		}
+		/* 6to4 2002::/16 (RFC 3056) embeds an IPv4 in bytes 2-5 */
+		if (b[0] == 0x20 && b[1] == 0x02) {
+			uint32_t v4;
+			memcpy(&v4, b + 2, 4);
+			return is_private_v4(ntohl(v4));
+		}
 		return 0;
 	}
 

@@ -183,7 +183,12 @@ This includes RFC 1918 private ranges (10/8, 172.16/12, 192.168/16),
 loopback (127/8, ::1), link-local (169.254/16, fe80::/10),
 shared address space (100.64/10), unique local IPv6 (fc00::/7),
 multicast, and reserved ranges.
-IPv4-mapped IPv6 addresses and the RFC 6052 well-known NAT64 prefix
+IPv4-mapped IPv6 addresses, IPv4-compatible
+.Pq Li ::a.b.c.d
+and 6to4
+.Pq Li 2002::/16
+addresses that embed a private IPv4 destination, and the RFC 6052
+well-known NAT64 prefix
 .Pa 64:ff9b::/96
 are also checked.
 The default is
