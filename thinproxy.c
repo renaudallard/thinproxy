@@ -65,7 +65,7 @@
 #include <sys/syscall.h>
 #endif
 
-#define THINPROXY_VERSION	"0.2.1"
+#define THINPROXY_VERSION	"0.2.2"
 
 #define LOGF_REQUESTS	0x01
 #define LOGF_DENIED	0x02

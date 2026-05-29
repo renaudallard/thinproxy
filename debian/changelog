@@ -1,3 +1,17 @@
+thinproxy (0.2.2-1) unstable; urgency=low
+
+  * Block IPv4-compatible and 6to4 IPv6 addresses that embed a private
+    IPv4 destination, closing a deny_private SSRF bypass.
+  * Reject whitespace in the request-target.
+  * Reject forwarded requests that lack a Host header.
+  * Accept a maximal-length configuration line ending in a newline.
+  * Set optreset before the second getopt scan on BSD.
+  * Preserve the reverse direction of a half-closed CONNECT tunnel on
+    the SO_SPLICE path.
+  * Fix a format-truncation build error on DragonFlyBSD.
+
+ -- Renaud Allard <renaud@allard.it>  Thu, 29 May 2026 00:00:00 +0000
+
 thinproxy (0.2.1-1) unstable; urgency=low
 
   * Log a single outcome line per request: a denied or failed request no
