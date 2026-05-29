@@ -1,3 +1,14 @@
+thinproxy (0.2.1-1) unstable; urgency=low
+
+  * Log a single outcome line per request: a denied or failed request no
+    longer also emits an accepted request line.
+  * Include the path in denial and resolve-failure lines for plain HTTP.
+  * Report name-resolution failures as RESOLVE_FAILED with the client IP,
+    destination, and reason.
+  * Tag wildcard-port CONNECTs with WILDCARD_PORT on their outcome line.
+
+ -- Renaud Allard <renaud@allard.it>  Thu, 29 May 2026 00:00:00 +0000
+
 thinproxy (0.1.6-1) unstable; urgency=low
 
   * Allow open(2) in seccomp filter for x86_64 musl DNS resolution.

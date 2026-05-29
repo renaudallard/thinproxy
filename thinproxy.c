@@ -65,7 +65,7 @@
 #include <sys/syscall.h>
 #endif
 
-#define THINPROXY_VERSION	"0.2.0"
+#define THINPROXY_VERSION	"0.2.1"
 
 #define LOGF_REQUESTS	0x01
 #define LOGF_DENIED	0x02
@@ -75,6 +75,7 @@
 #define DEFAULT_PORT		"8080"
 #define DEFAULT_CONFIG		"/etc/thinproxy.conf"
 #define BUF_SIZE		8192
+#define DEST_LOG_SIZE		2048	/* sanitized host:port[path] for logs */
 #define MAX_CONNS		512
 #define MAX_FDS			((MAX_CONNS) * 2 + 16)
 #define MAX_ACL			256
@@ -197,8 +198,9 @@ struct conn {
 	struct sockaddr_storage	peer;	/* client address */
 	enum conn_state	state;
 	int		is_connect;
-	char		dhost[256];	/* destination hostname */
-	char		dport[8];	/* destination port */
+	int		wildcard_log;	/* CONNECT matched a wildcard port */
+	char		dmethod[16];	/* sanitized method, for logging */
+	char		ddest[DEST_LOG_SIZE];	/* sanitized host:port[path] */
 	int		ceof;		/* client EOF received */
 	int		seof;		/* server EOF received */
 	int		cshut;		/* SHUT_WR done on client fd */
@@ -1467,6 +1469,33 @@ peer_str(struct sockaddr_storage *ss, char *buf, size_t bufsz)
 	return buf;
 }
 
+/*
+ * Emit one attributed log line for a connection:
+ *	"<peer> <tag> <dest> <detail> WILDCARD_PORT"
+ * The dest (sanitized host:port[path], set once in handle_request) and the
+ * detail are each omitted when absent; the WILDCARD_PORT marker is appended
+ * whenever the CONNECT port matched the wildcard rule, so it rides along on
+ * the request's outcome line whether that is the accepted line, a DENIED, or
+ * a RESOLVE_FAILED.  A request logs exactly one such line for its outcome,
+ * never both an accepted and a denied line.
+ */
+static void
+log_conn(int pri, struct conn *c, const char *tag, const char *detail)
+{
+	char peer[INET6_ADDRSTRLEN];
+	const char *wild = c->wildcard_log ? " WILDCARD_PORT" : "";
+
+	peer_str(&c->peer, peer, sizeof(peer));
+	if (c->ddest[0] != '\0' && detail != NULL)
+		logmsg(pri, "%s %s %s %s%s", peer, tag, c->ddest, detail, wild);
+	else if (c->ddest[0] != '\0')
+		logmsg(pri, "%s %s %s%s", peer, tag, c->ddest, wild);
+	else if (detail != NULL)
+		logmsg(pri, "%s %s %s%s", peer, tag, detail, wild);
+	else
+		logmsg(pri, "%s %s%s", peer, tag, wild);
+}
+
 static void
 handle_request(struct conn *c)
 {
@@ -1511,58 +1540,34 @@ handle_request(struct conn *c)
 	}
 
 	c->is_connect = is_connect;
-	strlcpy(c->dhost, host, sizeof(c->dhost));
-	strlcpy(c->dport, port, sizeof(c->dport));
+
+	/*
+	 * Stash a sanitized destination descriptor (host:port, plus the path
+	 * for non-CONNECT) and the method for logging.  The accepted-request
+	 * line is deferred until the request clears every deny gate (see
+	 * handle_resolving), so a denied request logs only its DENIED line
+	 * and never a duplicate accepted line.
+	 */
+	{
+		char raw[DEST_LOG_SIZE];
+
+		snprintf(raw, sizeof(raw), "%s:%s%s", host, port,
+		    is_connect ? "" : path);
+		sanitize_str(c->ddest, sizeof(c->ddest), raw);
+	}
+	sanitize_str(c->dmethod, sizeof(c->dmethod), method);
 
 	int prc = is_connect ? connect_port_allowed(port) : 1;
-	int wildcard_hit = (prc == 2 && (log_flags & LOGF_WILDCARD));
-
-	if (log_flags & LOGF_REQUESTS) {
-		char logbuf[2048];
-		char peer[INET6_ADDRSTRLEN];
-		size_t li, ln;
-
-		peer_str(&c->peer, peer, sizeof(peer));
-		ln = (size_t)snprintf(logbuf, sizeof(logbuf),
-		    "%s %s %s:%s%s%s", peer, method, host, port,
-		    is_connect ? "" : path,
-		    wildcard_hit ? " WILDCARD_PORT" : "");
-		if (ln >= sizeof(logbuf))
-			ln = sizeof(logbuf) - 1;
-		for (li = 0; li < ln; li++) {
-			if (logbuf[li] < 0x20 || logbuf[li] >= 0x7f)
-				logbuf[li] = '?';
-		}
-		logmsg(LOG_INFO, "%s", logbuf);
-	}
+	c->wildcard_log = (prc == 2 && (log_flags & LOGF_WILDCARD));
 
 	if (is_connect) {
 		if (prc == 0) {
-			if (log_flags & LOGF_DENIED) {
-				char peer[INET6_ADDRSTRLEN];
-				char shost[sizeof(c->dhost)];
-				char sport[sizeof(c->dport)];
-				peer_str(&c->peer, peer, sizeof(peer));
-				sanitize_str(shost, sizeof(shost), host);
-				sanitize_str(sport, sizeof(sport), port);
-				logmsg(LOG_WARNING,
-				    "%s DENIED %s:%s CONNECT_PORT",
-				    peer, shost, sport);
-			}
+			if (log_flags & LOGF_DENIED)
+				log_conn(LOG_WARNING, c, "DENIED",
+				    "CONNECT_PORT");
 			ign_write(c->cfd, ERR_403, sizeof(ERR_403) - 1);
 			conn_close(c);
 			return;
-		}
-		if (wildcard_hit && !(log_flags & LOGF_REQUESTS)) {
-			char peer[INET6_ADDRSTRLEN];
-			char shost[sizeof(c->dhost)];
-			char sport[sizeof(c->dport)];
-			peer_str(&c->peer, peer, sizeof(peer));
-			sanitize_str(shost, sizeof(shost), host);
-			sanitize_str(sport, sizeof(sport), port);
-			logmsg(LOG_WARNING,
-			    "%s CONNECT %s:%s WILDCARD_PORT",
-			    peer, shost, sport);
 		}
 
 		{
@@ -1591,11 +1596,7 @@ handle_request(struct conn *c)
 	}
 
 	if (dns_resolve_start(c, host, port) == -1) {
-		char shost[sizeof(c->dhost)];
-		char sport[sizeof(c->dport)];
-		sanitize_str(shost, sizeof(shost), host);
-		sanitize_str(sport, sizeof(sport), port);
-		logmsg(LOG_WARNING, "resolve %s:%s failed", shost, sport);
+		log_conn(LOG_WARNING, c, "RESOLVE_FAILED", "SETUP");
 		ign_write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
 		conn_close(c);
 		return;
@@ -1634,11 +1635,13 @@ handle_resolving(struct conn *c)
 	if (nr != (ssize_t)sizeof(dr) || dr.err != 0 ||
 	    dr.addrlen == 0 || dr.addrlen > sizeof(dr.addr)) {
 		if (nr == 0)
-			logmsg(LOG_WARNING, "DNS child killed");
+			log_conn(LOG_WARNING, c, "RESOLVE_FAILED",
+			    "CHILD_KILLED");
 		else if (nr != (ssize_t)sizeof(dr))
-			logmsg(LOG_WARNING, "DNS child: short read (%zd)", nr);
+			log_conn(LOG_WARNING, c, "RESOLVE_FAILED",
+			    "SHORT_READ");
 		else
-			logmsg(LOG_WARNING, "DNS resolution failed");
+			log_conn(LOG_WARNING, c, "RESOLVE_FAILED", "LOOKUP");
 		ign_write(c->cfd, ERR_502, sizeof(ERR_502) - 1);
 		conn_close(c);
 		return;
@@ -1646,21 +1649,22 @@ handle_resolving(struct conn *c)
 
 	if (cfg_deny_private &&
 	    is_private_addr((struct sockaddr *)&dr.addr)) {
-		if (log_flags & LOGF_DENIED) {
-			char peer[INET6_ADDRSTRLEN];
-			char shost[sizeof(c->dhost)];
-			char sport[sizeof(c->dport)];
-			peer_str(&c->peer, peer, sizeof(peer));
-			sanitize_str(shost, sizeof(shost), c->dhost);
-			sanitize_str(sport, sizeof(sport), c->dport);
-			logmsg(LOG_WARNING,
-			    "%s DENIED %s:%s PRIVATE_ADDRESS",
-			    peer, shost, sport);
-		}
+		if (log_flags & LOGF_DENIED)
+			log_conn(LOG_WARNING, c, "DENIED", "PRIVATE_ADDRESS");
 		ign_write(c->cfd, ERR_403, sizeof(ERR_403) - 1);
 		conn_close(c);
 		return;
 	}
+
+	/*
+	 * The request has cleared every deny gate: log the accepted request
+	 * now.  Denied requests returned above, so each request logs exactly
+	 * one outcome line.
+	 */
+	if (log_flags & LOGF_REQUESTS)
+		log_conn(LOG_INFO, c, c->dmethod, NULL);
+	else if (c->wildcard_log)
+		log_conn(LOG_WARNING, c, c->dmethod, NULL);
 
 	fd = socket(dr.family, dr.socktype, dr.protocol);
 	if (fd == -1 || fd >= MAX_FDS) {
@@ -2001,24 +2005,8 @@ reap_timeouts(void)
 		if (c->state == S_SPLICED)
 			continue;
 		if (now - c->atime > cfg_timeout) {
-			if (log_flags & LOGF_REQUESTS) {
-				char peer[INET6_ADDRSTRLEN];
-				char shost[sizeof(c->dhost)];
-				char sport[sizeof(c->dport)];
-				peer_str(&c->peer, peer, sizeof(peer));
-				if (c->dhost[0] != '\0') {
-					sanitize_str(shost, sizeof(shost),
-					    c->dhost);
-					sanitize_str(sport, sizeof(sport),
-					    c->dport);
-					logmsg(LOG_INFO,
-					    "%s TIMEOUT %s:%s",
-					    peer, shost, sport);
-				} else {
-					logmsg(LOG_INFO,
-					    "%s TIMEOUT", peer);
-				}
-			}
+			if (log_flags & LOGF_REQUESTS)
+				log_conn(LOG_INFO, c, "TIMEOUT", NULL);
 			conn_close(c);
 		}
 	}

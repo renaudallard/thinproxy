@@ -18,7 +18,7 @@ Zero dependencies, single file, minimal attack surface.
 - Privilege dropping after bind
 - OpenBSD pledge(2)/unveil(2) and Linux seccomp-BPF sandboxing
 - Automatic bind retry on restart
-- ~25 KB memory per connection
+- ~26 KB memory per connection
 
 ## Build
 
@@ -124,6 +124,17 @@ Use `allow` or `deny` directives, but not both.
 When `allow` is used, unlisted addresses are denied.
 When `deny` is used, unlisted addresses are allowed.
 Both IPv4 and IPv6 with optional CIDR prefix are supported.
+
+### Logging
+
+thinproxy logs to stderr, or to syslog when run as a daemon with `-d`. A request is logged once for its disposition (never both an accepted and a denied line):
+
+- Accepted (`requests` category): `<client> <method> <host>:<port>[<path>]` (path shown for plain HTTP)
+- Denied (`denied` category): `<client> DENIED [<dest>] <reason>`, where `<dest>` is shown when known (omitted for `ACL` and `PER_IP_LIMIT`, which are decided before the request is read); reasons are `ACL`, `PER_IP_LIMIT`, `CONNECT_PORT`, `PRIVATE_ADDRESS`
+- Resolve failure (always logged): `<client> RESOLVE_FAILED <dest> <reason>` with reason `LOOKUP`, `CHILD_KILLED`, `SHORT_READ`, or `SETUP`
+- Timeout (`requests` category): `<client> TIMEOUT [<dest>]` when a connection exceeds `idle_timeout`
+
+For plain HTTP, `<dest>` includes the path. When the `wildcard` category is enabled, a CONNECT whose port matched the wildcard rule is tagged with a trailing `WILDCARD_PORT` on whichever line it produces.
 
 ### Example Configuration
 

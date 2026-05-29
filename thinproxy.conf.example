@@ -18,9 +18,9 @@ port 8080
 #verbose no
 
 # Selective log categories (repeatable, alternative to verbose)
-# requests  - log every request with client IP
-# denied    - log all denials with client IP and reason
-# wildcard  - log wildcard port matches
+# requests  - log each accepted request with client IP and destination
+# denied    - log all denials with client IP, destination, and reason
+# wildcard  - tag wildcard-port CONNECTs (WILDCARD_PORT) on their outcome line
 #log requests
 #log denied
 

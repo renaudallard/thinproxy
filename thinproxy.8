@@ -1,4 +1,4 @@
-.Dd May 28, 2026
+.Dd May 29, 2026
 .Dt THINPROXY 8
 .Os
 .Sh NAME
@@ -120,9 +120,19 @@ May be specified multiple times.
 The following categories are recognized:
 .Bl -tag -width "wildcard" -compact
 .It Cm requests
-Log every proxied request with client IP, method, destination, and path.
+Log each accepted request with client IP, method, destination, and
+.Pq for plain HTTP
+path.
+The line is emitted only after the request clears every access check, so a
+denied request is never also logged as accepted.
+A connection later reaped for exceeding
+.Cm idle_timeout
+is logged in this category as a
+.Cm TIMEOUT
+line with the client IP and destination.
 .It Cm denied
-Log denied connections with client IP, destination (when available),
+Log denied connections with client IP, destination
+.Pq when known, including the path for plain HTTP ,
 and denial reason.
 Reasons:
 .Cm ACL ,
@@ -131,8 +141,24 @@ Reasons:
 .Cm PRIVATE_ADDRESS .
 Enabled by default.
 .It Cm wildcard
-Log CONNECT requests allowed by the wildcard port rule.
+Tag the outcome line of CONNECT requests whose port matched the wildcard
+rule with
+.Cm WILDCARD_PORT ,
+whether the request was accepted, denied, timed out, or failed to resolve.
+An accepted wildcard request is logged even when
+.Cm requests
+is disabled.
 .El
+.Pp
+Name resolution failures are always logged, independent of the categories
+above, as a
+.Cm RESOLVE_FAILED
+line carrying the client IP, destination, and one of the reasons
+.Cm LOOKUP ,
+.Cm CHILD_KILLED ,
+.Cm SHORT_READ ,
+or
+.Cm SETUP .
 .It Cm max_connections Ar number
 Maximum concurrent connections.
 Must be between 1 and 512.
