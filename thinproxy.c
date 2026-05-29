@@ -1590,8 +1590,15 @@ handle_request(struct conn *c)
 	{
 		char raw[DEST_LOG_SIZE];
 
-		snprintf(raw, sizeof(raw), "%s:%s%s", host, port,
-		    is_connect ? "" : path);
+		/*
+		 * Bound the path with an explicit precision so the descriptor
+		 * provably fits raw (host <= 255, port <= 7); the log line is
+		 * capped at DEST_LOG_SIZE anyway, and this keeps the build
+		 * free of format-truncation warnings.
+		 */
+		snprintf(raw, sizeof(raw), "%s:%s%.*s", host, port,
+		    is_connect ? 0 :
+		    (int)(sizeof(raw) - sizeof(host) - sizeof(port) - 1), path);
 		sanitize_str(c->ddest, sizeof(c->ddest), raw);
 	}
 	sanitize_str(c->dmethod, sizeof(c->dmethod), method);
