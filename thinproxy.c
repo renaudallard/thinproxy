@@ -2171,9 +2171,49 @@ event_loop(int lfd)
 					conn_update_poll(c);
 				}
 				break;
-			case S_SPLICED:
-				conn_close(c);
+			case S_SPLICED: {
+				int serr = 0;
+				socklen_t slen = sizeof(serr);
+
+				if (rev & (POLLERR | POLLNVAL)) {
+					conn_close(c);
+					break;
+				}
+				/*
+				 * The readable fd is the source whose splice
+				 * just ended.  A clean source EOF leaves
+				 * SO_ERROR == 0 and is a TCP half-close to
+				 * propagate to the peer while the reverse
+				 * splice keeps running; an idle timeout or
+				 * transport error (SO_ERROR != 0) tears the
+				 * whole tunnel down as before.
+				 */
+				if (getsockopt(fd, SOL_SOCKET, SO_ERROR,
+				    &serr, &slen) == -1 || serr != 0) {
+					conn_close(c);
+					break;
+				}
+				if (fd == c->cfd) {
+					if (c->sfd >= 0 && !c->sshut) {
+						(void)shutdown(c->sfd,
+						    SHUT_WR);
+						c->sshut = 1;
+					}
+					c->ceof = 1;
+					poll_mod(c->cfd, 0);
+				} else {
+					if (c->cfd >= 0 && !c->cshut) {
+						(void)shutdown(c->cfd,
+						    SHUT_WR);
+						c->cshut = 1;
+					}
+					c->seof = 1;
+					poll_mod(c->sfd, 0);
+				}
+				if (c->ceof && c->seof)
+					conn_close(c);
 				break;
+			}
 			}
 
 			if (fdmap[fd] != NULL && (rev & POLLERR))
