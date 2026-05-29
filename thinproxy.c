@@ -826,10 +826,11 @@ parse_config(const char *path, int must_exist)
 			*p = '\0';
 		} else if (strlen(line) >= sizeof(line) - 1) {
 			/* No newline means fgets filled the buffer. Peek at
-			 * the next byte: if EOF, this was a legitimate
-			 * unterminated final line; otherwise it was truncated. */
+			 * the next byte: EOF is a legitimate unterminated final
+			 * line, a newline means the content filled the buffer
+			 * exactly and is valid, anything else is truncation. */
 			int c = fgetc(fp);
-			if (c != EOF) {
+			if (c != EOF && c != '\n') {
 				ungetc(c, fp);
 				logmsg(LOG_ERR, "%s:%d: line too long",
 				    path, lineno);
