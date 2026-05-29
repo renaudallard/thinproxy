@@ -267,7 +267,11 @@ duplicate
 .Cm Content-Length ,
 or
 .Cm Transfer-Encoding
-headers; a
+headers; a missing
+.Cm Host
+header on a forwarded
+.Pq non-CONNECT
+request; a
 .Cm Transfer-Encoding
 value other than
 .Cm chunked ;

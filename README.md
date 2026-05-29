@@ -167,6 +167,7 @@ Requests are rejected with `400 Bad Request` if they contain:
 - Whitespace between a header name and its colon
 - Obsolete header line folding (obs-fold)
 - Duplicate `Host`, `Content-Length`, or `Transfer-Encoding` headers
+- A missing `Host` header on a forwarded (non-CONNECT) request
 - A `Transfer-Encoding` value other than `chunked`
 - Both `Transfer-Encoding` and `Content-Length` together
 

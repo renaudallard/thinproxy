@@ -1294,6 +1294,14 @@ build_request(const char *req, size_t reqlen,
 			break;
 
 		if (lend == p) {
+			/*
+			 * The authority is rewritten to origin-form, so a
+			 * forwarded HTTP/1.1 request without a Host header
+			 * would be unroutable upstream.  RFC 7230 sec 5.4
+			 * requires it; reject when absent.
+			 */
+			if (!have_host)
+				return -1;
 			if (!have_conn) {
 				size_t w = (size_t)snprintf((char *)buf + n,
 				    bufsz - n, "Connection: close\r\n");
