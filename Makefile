@@ -9,8 +9,9 @@ UNITDIR ?=	/lib/systemd/system
 
 all: thinproxy
 
+thinproxy: SECCOMP_DEF = $(shell printf '#include <linux/seccomp.h>\nint main(void){return 0;}\n' | $(CC) -x c -c -o /dev/null - >/dev/null 2>&1 && printf '%s' -DHAVE_SECCOMP)
 thinproxy: thinproxy.c
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ thinproxy.c
+	$(CC) $(CFLAGS) $(SECCOMP_DEF) $(LDFLAGS) -o $@ thinproxy.c
 
 install: thinproxy
 	install -d $(DESTDIR)$(BINDIR)

@@ -59,10 +59,12 @@
 #ifdef __linux__
 #include <stddef.h>
 #include <sys/prctl.h>
+#ifdef HAVE_SECCOMP
 #include <linux/seccomp.h>
 #include <linux/filter.h>
 #include <linux/audit.h>
 #include <sys/syscall.h>
+#endif
 #endif
 
 #define THINPROXY_VERSION	"0.2.2"
@@ -2366,7 +2368,7 @@ drop_privs(const char *user)
 
 /* ---- seccomp-bpf (Linux) ---- */
 
-#ifdef __linux__
+#ifdef HAVE_SECCOMP
 
 #if defined(__x86_64__)
 #define THINPROXY_AUDIT_ARCH	AUDIT_ARCH_X86_64
@@ -2564,7 +2566,7 @@ setup_seccomp(void)
 	return 0;
 #endif /* THINPROXY_AUDIT_ARCH */
 }
-#endif /* __linux__ */
+#endif /* HAVE_SECCOMP */
 
 /* ---- main ---- */
 
@@ -2705,7 +2707,7 @@ main(int argc, char *argv[])
 	}
 #endif
 
-#ifdef __linux__
+#ifdef HAVE_SECCOMP
 	if (setup_seccomp() == -1) {
 		close(lfd);
 		return 1;
