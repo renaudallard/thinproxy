@@ -28,6 +28,14 @@ make
 
 Builds on OpenBSD, Linux (glibc and musl), macOS, FreeBSD, NetBSD, and DragonFlyBSD.
 
+On minimal Linux images such as Alpine, install the toolchain and kernel headers
+first. The `linux-headers` package provides `<linux/seccomp.h>` for the seccomp
+sandbox:
+
+```sh
+apk add gcc musl-dev make linux-headers
+```
+
 ## Install
 
 ```
