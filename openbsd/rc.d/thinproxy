@@ -3,6 +3,10 @@
 daemon="/usr/local/bin/thinproxy"
 daemon_flags="-d -u _thinproxy"
 
+# thinproxy does not reload on SIGHUP (it terminates), so reject the
+# reload action rather than killing the daemon on rcctl reload.
+rc_reload=NO
+
 . /etc/rc.d/rc.subr
 
 rc_cmd $1
