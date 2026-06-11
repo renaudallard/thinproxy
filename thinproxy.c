@@ -1249,7 +1249,7 @@ parse_request(const char *req, size_t len,
     int *is_connect)
 {
 	const char *p, *lend, *ustart, *uend;
-	const char *h, *hend, *slash;
+	const char *h, *hend, *sep;
 	size_t n;
 
 	lend = memchr(req, '\r', len);
@@ -1329,19 +1329,41 @@ parse_request(const char *req, size_t len,
 		if (!prefix_ci(ustart, (size_t)(uend - ustart), "http://"))
 			return -1;
 		h = ustart + 7;
-		slash = memchr(h, '/', (size_t)(uend - h));
-		hend = slash ? slash : uend;
+		/*
+		 * The authority ends at the first '/', '?' or '#' (RFC 3986
+		 * sec 3.2); stopping only at '/' would fold a query or fragment
+		 * into the hostname and hand junk to the resolver.
+		 */
+		sep = NULL;
+		for (p = h; p < uend; p++) {
+			if (*p == '/' || *p == '?' || *p == '#') {
+				sep = p;
+				break;
+			}
+		}
+		hend = sep ? sep : uend;
 		if (parse_hostport(h, hend, host, hsz,
 		    port, psz, "80") == -1)
 			return -1;
-		if (slash != NULL) {
-			n = (size_t)(uend - slash);
+		if (sep == NULL) {
+			strlcpy(path, "/", pathsz);
+		} else if (*sep == '/') {
+			n = (size_t)(uend - sep);
 			if (n >= pathsz)
 				return -1;
-			memcpy(path, slash, n);
+			memcpy(path, sep, n);
 			path[n] = '\0';
 		} else {
-			strlcpy(path, "/", pathsz);
+			/*
+			 * Origin-form needs a leading '/', so synthesize one
+			 * ahead of the query/fragment (http://h?q -> /?q).
+			 */
+			n = (size_t)(uend - sep);
+			if (n + 1 >= pathsz)
+				return -1;
+			path[0] = '/';
+			memcpy(path + 1, sep, n);
+			path[n + 1] = '\0';
 		}
 	}
 
