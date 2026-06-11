@@ -1304,6 +1304,20 @@ parse_request(const char *req, size_t len,
 		if (*p == ' ')
 			return -1;
 
+	/*
+	 * RFC 7230 sec 2.6: HTTP-version is "HTTP/" DIGIT "." DIGIT.  The
+	 * token after the final SP is forwarded verbatim by build_request,
+	 * so an empty or junk version would otherwise reach the upstream and
+	 * create a parser differential.
+	 */
+	{
+		const char *ver = uend + 1;
+		if (lend - ver != 8 || memcmp(ver, "HTTP/", 5) != 0 ||
+		    !isdigit((unsigned char)ver[5]) || ver[6] != '.' ||
+		    !isdigit((unsigned char)ver[7]))
+			return -1;
+	}
+
 	*is_connect = (strcasecmp(method, "CONNECT") == 0);
 
 	if (*is_connect) {
