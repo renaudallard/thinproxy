@@ -62,6 +62,10 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now thinproxy
 ```
 
+The shipped unit runs thinproxy as an unprivileged, transient user
+(`DynamicUser=yes`), so the configuration does not need a `user` directive;
+`/etc/thinproxy.conf` must be readable by the service.
+
 ## Usage
 
 ```

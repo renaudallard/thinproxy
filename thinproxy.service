@@ -12,6 +12,11 @@ RestartSec=5
 # default needs more than the common 1024 soft limit.
 LimitNOFILE=2048
 
+# Run as an unprivileged, transient system user. thinproxy only needs to
+# read its config, /etc/resolv.conf and /etc/hosts, so no static account is
+# required; do not set a "user" directive in the config alongside this.
+DynamicUser=yes
+
 # Security hardening
 NoNewPrivileges=yes
 ProtectSystem=strict
