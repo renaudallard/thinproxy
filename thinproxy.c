@@ -1396,12 +1396,15 @@ build_request(const char *req, size_t reqlen,
 		}
 
 		if (prefix_ci(p, (size_t)(lend - p), "Connection:")) {
-			size_t w = (size_t)snprintf((char *)buf + n,
-			    bufsz - n, "Connection: close\r\n");
-			n += w;
-			if (n >= bufsz)
-				return -1;
-			have_conn = 1;
+			/* collapse repeated Connection headers into one */
+			if (!have_conn) {
+				size_t w = (size_t)snprintf((char *)buf + n,
+				    bufsz - n, "Connection: close\r\n");
+				n += w;
+				if (n >= bufsz)
+					return -1;
+				have_conn = 1;
+			}
 			p = lend + 2;
 			continue;
 		}
