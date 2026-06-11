@@ -936,6 +936,19 @@ parse_config(const char *path, int must_exist)
 			return -1;
 		}
 
+		/*
+		 * Every directive takes a single whitespace-free token, so an
+		 * embedded space means a malformed value; reject it here with a
+		 * line number rather than letting it fail obscurely later (e.g.
+		 * "port 80 81" reaching getaddrinfo).
+		 */
+		if (strcspn(val, " \t") != strlen(val)) {
+			logmsg(LOG_ERR, "%s:%d: unexpected whitespace in "
+			    "value for %s", path, lineno, key);
+			fclose(fp);
+			return -1;
+		}
+
 		if (strcasecmp(key, "listen") == 0) {
 			if (strlen(val) >= sizeof(cfg_addr)) {
 				logmsg(LOG_ERR,
