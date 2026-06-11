@@ -2355,6 +2355,24 @@ event_loop(int lfd)
 						c->seof = 1;
 					conn_update_poll(c);
 				}
+				/*
+				 * On a transport error (e.g. peer RST) drop the
+				 * data bound for the failed fd, then flush what
+				 * is already buffered toward the surviving peer
+				 * before tearing down instead of discarding it.
+				 */
+				if (fdmap[fd] != NULL && (rev & POLLERR)) {
+					if (fd == c->cfd) {
+						c->s2c_len = 0;
+						c->s2c_off = 0;
+					} else {
+						c->c2s_len = 0;
+						c->c2s_off = 0;
+					}
+					c->ceof = 1;
+					c->seof = 1;
+					conn_update_poll(c);
+				}
 				break;
 			case S_SPLICED: {
 				int serr = 0;
@@ -2401,7 +2419,12 @@ event_loop(int lfd)
 			}
 			}
 
-			if (fdmap[fd] != NULL && (rev & POLLERR))
+			/*
+			 * S_RELAY handles POLLERR itself (flush-then-close);
+			 * other states have no buffered data to preserve.
+			 */
+			if (fdmap[fd] != NULL && (rev & POLLERR) &&
+			    fdmap[fd]->state != S_RELAY)
 				conn_close(fdmap[fd]);
 		}
 
