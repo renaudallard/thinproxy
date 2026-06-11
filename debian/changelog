@@ -1,3 +1,36 @@
+thinproxy (0.2.3-1) unstable; urgency=low
+
+  * Replace the snprintf-based strlcpy shim with a real bounded copy so
+    -Werror builds succeed below -O2 and under BSD make.
+  * Allow restart_syscall in the seccomp filter so a stopped and resumed
+    daemon (SIGSTOP/SIGCONT, container pause) is not killed on x86_64.
+  * Flush buffered relay data to the surviving peer before closing on a
+    transport error instead of discarding it.
+  * Add the -F flag to force foreground, overriding a daemon yes setting;
+    the systemd unit uses it.
+  * Validate the HTTP version token in the request line.
+  * Stop folding a URL query or fragment into the hostname and forward it
+    in the path instead.
+  * Require a single run of digits for Content-Length.
+  * Require a valid IPv6 literal inside brackets in the request target.
+  * Block more IANA special-use ranges in deny_private (192.0.0.0/24,
+    198.18.0.0/15, fec0::/10, TEST-NETs, 6to4 relay anycast).
+  * Reject a non-regular config file and report read errors instead of
+    treating them as end of file.
+  * Reject config lines containing a NUL byte and values with embedded
+    whitespace.
+  * Require the /96 suffix on nat64_prefix as documented.
+  * Honor idle_timeout values shorter than the poll interval.
+  * Do not idle-reap a connection while its DNS resolution is in flight,
+    bounding the number of resolver children.
+  * Select the init script by target OS instead of probing the build host
+    and install the man page under PREFIX/man on OpenBSD.
+  * Reject rcctl reload in the OpenBSD rc.d script.
+  * Run the systemd service as an unprivileged DynamicUser and raise
+    LimitNOFILE.
+
+ -- Renaud Allard <renaud@allard.it>  Thu, 11 Jun 2026 12:32:58 +0000
+
 thinproxy (0.2.2-1) unstable; urgency=low
 
   * Block IPv4-compatible and 6to4 IPv6 addresses that embed a private
