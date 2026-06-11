@@ -4,7 +4,9 @@ CFLAGS +=	-Wall -Wextra -Werror -pedantic -std=c99
 
 PREFIX ?=	/usr/local
 BINDIR ?=	$(PREFIX)/bin
-MANDIR ?=	$(PREFIX)/share/man
+# MANDIR is computed per-OS at install time when left empty (OpenBSD uses
+# $(PREFIX)/man, others $(PREFIX)/share/man); set it to override.
+MANDIR ?=
 UNITDIR ?=	/lib/systemd/system
 
 all: thinproxy
@@ -15,8 +17,15 @@ thinproxy: thinproxy.c
 install: thinproxy
 	install -d $(DESTDIR)$(BINDIR)
 	install -m 755 thinproxy $(DESTDIR)$(BINDIR)/
-	install -d $(DESTDIR)$(MANDIR)/man8
-	install -m 644 thinproxy.8 $(DESTDIR)$(MANDIR)/man8/
+	@mandir="$(MANDIR)"; \
+	if [ -z "$$mandir" ]; then \
+		case "`uname -s`" in \
+		OpenBSD) mandir="$(PREFIX)/man";; \
+		*) mandir="$(PREFIX)/share/man";; \
+		esac; \
+	fi; \
+	install -d "$(DESTDIR)$$mandir/man8"; \
+	install -m 644 thinproxy.8 "$(DESTDIR)$$mandir/man8/"
 	@case "`uname -s`" in \
 	OpenBSD) \
 		install -d $(DESTDIR)/etc/rc.d; \
@@ -33,7 +42,14 @@ install: thinproxy
 
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/thinproxy
-	rm -f $(DESTDIR)$(MANDIR)/man8/thinproxy.8
+	@mandir="$(MANDIR)"; \
+	if [ -z "$$mandir" ]; then \
+		case "`uname -s`" in \
+		OpenBSD) mandir="$(PREFIX)/man";; \
+		*) mandir="$(PREFIX)/share/man";; \
+		esac; \
+	fi; \
+	rm -f "$(DESTDIR)$$mandir/man8/thinproxy.8"
 	rm -f $(DESTDIR)/etc/rc.d/thinproxy
 	rm -f $(DESTDIR)$(UNITDIR)/thinproxy.service
 
