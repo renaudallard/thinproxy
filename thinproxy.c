@@ -1254,6 +1254,12 @@ parse_request(const char *req, size_t len,
 		if (!isdigit((unsigned char)*p))
 			return -1;
 	}
+	{
+		const char *errstr;
+		(void)strtonum(port, 1, 65535, &errstr);
+		if (errstr != NULL)
+			return -1;
+	}
 	if (host[0] == '\0')
 		return -1;
 	return 0;
