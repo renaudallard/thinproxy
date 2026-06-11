@@ -31,6 +31,7 @@
 #include <sys/types.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
@@ -849,6 +850,15 @@ parse_config(const char *path, int must_exist)
 		return -1;
 	}
 
+	{
+		struct stat st;
+		if (fstat(fileno(fp), &st) == -1 || !S_ISREG(st.st_mode)) {
+			logmsg(LOG_ERR, "%s: not a regular file", path);
+			fclose(fp);
+			return -1;
+		}
+	}
+
 	while (fgets(line, sizeof(line), fp) != NULL) {
 		lineno++;
 
@@ -1090,6 +1100,12 @@ parse_config(const char *path, int must_exist)
 			fclose(fp);
 			return -1;
 		}
+	}
+
+	if (ferror(fp)) {
+		logmsg(LOG_ERR, "%s: read error: %s", path, strerror(errno));
+		fclose(fp);
+		return -1;
 	}
 
 	log_flags |= log_extra;
