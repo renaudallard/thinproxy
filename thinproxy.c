@@ -1076,7 +1076,7 @@ parse_config(const char *path, int must_exist)
 			size_t alen = slash ? (size_t)(slash - val)
 			    : strlen(val);
 			if (alen == 0 || alen >= sizeof(addr) ||
-			    (slash != NULL && strcmp(slash, "/96") != 0)) {
+			    slash == NULL || strcmp(slash, "/96") != 0) {
 				logmsg(LOG_ERR,
 				    "%s:%d: nat64_prefix: expected addr/96",
 				    path, lineno);
