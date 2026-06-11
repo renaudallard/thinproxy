@@ -1489,8 +1489,26 @@ build_request(const char *req, size_t reqlen,
 			return -1;
 
 		if (prefix_ci(p, (size_t)(lend - p), "Content-Length:")) {
+			const char *v, *vend, *d;
 			if (have_cl || have_te)
 				return -1;
+			/*
+			 * RFC 7230 sec 3.3.2: a single run of digits.  A comma
+			 * list ("5, 6") or a signed/garbage value is a framing
+			 * smuggling vector, so validate rather than forward it.
+			 */
+			v = colon + 1;
+			while (v < lend && (*v == ' ' || *v == '\t'))
+				v++;
+			vend = lend;
+			while (vend > v &&
+			    (vend[-1] == ' ' || vend[-1] == '\t'))
+				vend--;
+			if (v == vend)
+				return -1;
+			for (d = v; d < vend; d++)
+				if (!isdigit((unsigned char)*d))
+					return -1;
 			have_cl = 1;
 		} else if (prefix_ci(p, (size_t)(lend - p),
 		    "Transfer-Encoding:")) {
