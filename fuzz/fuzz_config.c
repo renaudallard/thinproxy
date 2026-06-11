@@ -24,23 +24,8 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	close(fd);
 
 	if (w == (ssize_t)size) {
-		/* reset global state before each parse */
-		acl_mode = ACL_NONE;
-		nacl = 0;
-		nconnect_ports = 0;
-		connect_port_wildcard = 0;
-		cfg_maxconns = MAX_CONNS;
-		cfg_timeout = 300;
-		cfg_maxconns_per_ip = 0;
-		cfg_deny_private = 0;
-		log_flags = 0;
-		dflag = 0;
-		(void)snprintf(cfg_addr, sizeof(cfg_addr), "%s",
-		    DEFAULT_ADDR);
-		(void)snprintf(cfg_port, sizeof(cfg_port), "%s",
-		    DEFAULT_PORT);
-		cfg_user[0] = '\0';
-
+		/* parse_config() calls config_reset() first, so no manual
+		 * global reset is needed between iterations */
 		parse_config(path, 1);
 	}
 
