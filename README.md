@@ -1,7 +1,16 @@
-# thinproxy
+<div align="center">
 
-Lightweight, asynchronous HTTP/HTTPS proxy written in C.
-Zero dependencies, single file, minimal attack surface.
+<img src="docs/banner.png" alt="thinproxy" width="100%">
+
+Lightweight, asynchronous HTTP/HTTPS proxy written in C.<br>
+Zero dependencies &middot; single file &middot; minimal attack surface.
+
+[![Build](https://github.com/renaudallard/thinproxy/actions/workflows/build.yml/badge.svg)](https://github.com/renaudallard/thinproxy/actions/workflows/build.yml)
+[![License](https://img.shields.io/badge/license-BSD--2--Clause-blue.svg)](LICENSE)
+[![Language](https://img.shields.io/badge/language-C-555555.svg)](thinproxy.c)
+![Platforms](https://img.shields.io/badge/platforms-OpenBSD%20%C2%B7%20Linux%20%C2%B7%20macOS%20%C2%B7%20%2ABSD-0b7261.svg)
+
+</div>
 
 ## Features
 
