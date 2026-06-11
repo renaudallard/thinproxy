@@ -2247,18 +2247,30 @@ event_loop(int lfd)
 		short		rev;
 		struct conn	*c;
 	} evbuf[MAX_FDS];
-	int nev, ret;
+	int nev, ret, poll_ms;
 	nfds_t i;
-	time_t last_reap;
+	time_t last_reap, reap_iv;
 
 	now = mono_now();
 	last_reap = now;
+
+	/*
+	 * Reaping only runs between poll wakeups, so an idle_timeout shorter
+	 * than the default poll interval would not be honored.  Wake (and
+	 * reap) at least every cfg_timeout seconds in that case.
+	 */
+	reap_iv = POLL_TIMEOUT / 1000;
+	poll_ms = POLL_TIMEOUT;
+	if (cfg_timeout > 0 && cfg_timeout < reap_iv) {
+		reap_iv = cfg_timeout;
+		poll_ms = cfg_timeout * 1000;
+	}
 
 	while (running) {
 		poll_mod(lfd, (nconns < cfg_maxconns && !accept_paused)
 		    ? POLLIN : 0);
 
-		ret = poll(pfds, npfds, POLL_TIMEOUT);
+		ret = poll(pfds, npfds, poll_ms);
 		if (ret == -1) {
 			if (errno == EINTR)
 				continue;
@@ -2428,7 +2440,7 @@ event_loop(int lfd)
 				conn_close(fdmap[fd]);
 		}
 
-		if (now - last_reap >= POLL_TIMEOUT / 1000) {
+		if (now - last_reap >= reap_iv) {
 			reap_timeouts();
 			last_reap = now;
 		}
