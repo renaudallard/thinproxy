@@ -2804,7 +2804,7 @@ static void __dead
 usage(void)
 {
 	fprintf(stderr,
-	    "usage: thinproxy [-dVv] [-b address] [-f config] "
+	    "usage: thinproxy [-dFVv] [-b address] [-f config] "
 	    "[-p port] [-u user]\n");
 	exit(1);
 }
@@ -2831,7 +2831,7 @@ main(int argc, char *argv[])
 	 * separated "-v -f path".
 	 */
 	opterr = 0;
-	while ((ch = getopt(argc, argv, "b:df:p:u:Vv")) != -1) {
+	while ((ch = getopt(argc, argv, "b:dFf:p:u:Vv")) != -1) {
 		if (ch == 'f') {
 			cfgpath = optarg;
 			cfgpath_explicit = 1;
@@ -2852,7 +2852,7 @@ main(int argc, char *argv[])
 	optreset = 1;
 #endif
 	optind = 1;
-	while ((ch = getopt(argc, argv, "b:df:p:u:Vv")) != -1) {
+	while ((ch = getopt(argc, argv, "b:dFf:p:u:Vv")) != -1) {
 		switch (ch) {
 		case 'b':
 			if (strlen(optarg) >= sizeof(cfg_addr)) {
@@ -2863,6 +2863,10 @@ main(int argc, char *argv[])
 			break;
 		case 'd':
 			dflag = 1;
+			break;
+		case 'F':
+			/* force foreground, overriding a config "daemon yes" */
+			dflag = 0;
 			break;
 		case 'f':
 			break;

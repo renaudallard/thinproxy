@@ -64,18 +64,21 @@ sudo systemctl enable --now thinproxy
 
 The shipped unit runs thinproxy as an unprivileged, transient user
 (`DynamicUser=yes`), so the configuration does not need a `user` directive;
-`/etc/thinproxy.conf` must be readable by the service.
+`/etc/thinproxy.conf` must be readable by the service. The unit also passes
+`-F` to keep thinproxy in the foreground, so leave `daemon` set to `no`
+(the default); a `daemon yes` config would otherwise make the service exit.
 
 ## Usage
 
 ```
-thinproxy [-dVv] [-b address] [-f config] [-p port] [-u user]
+thinproxy [-dFVv] [-b address] [-f config] [-p port] [-u user]
 ```
 
 | Flag | Description |
 |------|-------------|
 | `-b address` | Bind address (default: `127.0.0.1`) |
 | `-d` | Daemonize and log to syslog |
+| `-F` | Force foreground, overriding a `daemon yes` config (for systemd etc.) |
 | `-f config` | Configuration file (default: `/etc/thinproxy.conf`) |
 | `-p port` | Listen port (default: `8080`) |
 | `-u user` | Drop privileges to user after bind |

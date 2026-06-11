@@ -6,7 +6,7 @@
 .Nd lightweight asynchronous HTTP/HTTPS proxy
 .Sh SYNOPSIS
 .Nm
-.Op Fl dVv
+.Op Fl dFVv
 .Op Fl b Ar address
 .Op Fl f Ar config
 .Op Fl p Ar port
@@ -43,6 +43,13 @@ Daemonize.
 Run in the background and log to
 .Xr syslog 3
 instead of standard error.
+.It Fl F
+Run in the foreground, overriding a
+.Cm daemon Cm yes
+setting in the configuration file.
+Useful under process supervisors such as
+.Xr systemd 1
+that expect the service to stay in the foreground.
 .It Fl f Ar config
 Read configuration from
 .Ar config
