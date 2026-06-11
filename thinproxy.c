@@ -830,6 +830,36 @@ config_reset(void)
 	connect_port_wildcard = 0;
 }
 
+/*
+ * Read one logical line (without the trailing '\n') into buf.  Returns 1
+ * on a line, 0 at end of file with nothing read, -1 when the line is
+ * longer than buf.  *hasnul is set when the line contained a NUL byte;
+ * fgets(3) cannot report that, and a NUL would otherwise shorten strlen
+ * and let an over-long or split directive slip past the length check.
+ */
+static int
+read_config_line(FILE *fp, char *buf, size_t bufsz, int *hasnul)
+{
+	size_t i = 0;
+	int c;
+
+	*hasnul = 0;
+	while ((c = fgetc(fp)) != EOF && c != '\n') {
+		if (c == '\0')
+			*hasnul = 1;
+		if (i + 1 >= bufsz) {
+			while (c != '\n' && c != EOF)
+				c = fgetc(fp);
+			return -1;
+		}
+		buf[i++] = (char)c;
+	}
+	if (c == EOF && i == 0)
+		return 0;
+	buf[i] = '\0';
+	return 1;
+}
+
 static int
 parse_config(const char *path, int must_exist)
 {
@@ -859,25 +889,20 @@ parse_config(const char *path, int must_exist)
 		}
 	}
 
-	while (fgets(line, sizeof(line), fp) != NULL) {
+	int rl, hasnul;
+	while ((rl = read_config_line(fp, line, sizeof(line), &hasnul)) != 0) {
 		lineno++;
 
-		p = strchr(line, '\n');
-		if (p != NULL) {
-			*p = '\0';
-		} else if (strlen(line) >= sizeof(line) - 1) {
-			/* No newline means fgets filled the buffer. Peek at
-			 * the next byte: EOF is a legitimate unterminated final
-			 * line, a newline means the content filled the buffer
-			 * exactly and is valid, anything else is truncation. */
-			int c = fgetc(fp);
-			if (c != EOF && c != '\n') {
-				ungetc(c, fp);
-				logmsg(LOG_ERR, "%s:%d: line too long",
-				    path, lineno);
-				fclose(fp);
-				return -1;
-			}
+		if (rl == -1) {
+			logmsg(LOG_ERR, "%s:%d: line too long", path, lineno);
+			fclose(fp);
+			return -1;
+		}
+		if (hasnul) {
+			logmsg(LOG_ERR, "%s:%d: NUL byte in line",
+			    path, lineno);
+			fclose(fp);
+			return -1;
 		}
 
 		p = strchr(line, '#');
