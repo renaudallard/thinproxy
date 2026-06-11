@@ -466,6 +466,10 @@ acl_add(const char *cidr)
 	}
 
 	e = &acl_list[nacl];
+	if (strlen(cidr) >= sizeof(buf)) {
+		logmsg(LOG_ERR, "address too long: %s", cidr);
+		return -1;
+	}
 	strlcpy(buf, cidr, sizeof(buf));
 
 	slash = strchr(buf, '/');
