@@ -98,7 +98,34 @@
  */
 #ifndef __OpenBSD__
 #undef strlcpy
-#define strlcpy(d, s, n)	(size_t)snprintf((d), (n), "%s", (s))
+/*
+ * A real bounded string copy.  A snprintf("%s") shim would draw
+ * -Wformat-truncation at low optimization levels (the strlen guards at
+ * the call sites are invisible to the optimizer there), breaking -Werror
+ * builds outside -O2; this loop has no such issue and returns the proper
+ * strlcpy(3) length.
+ */
+static size_t
+strlcpy_compat(char *dst, const char *src, size_t dsize)
+{
+	const char *osrc = src;
+	size_t nleft = dsize;
+
+	if (nleft != 0) {
+		while (--nleft != 0) {
+			if ((*dst++ = *src++) == '\0')
+				break;
+		}
+	}
+	if (nleft == 0) {
+		if (dsize != 0)
+			*dst = '\0';
+		while (*src++)
+			;
+	}
+	return (size_t)(src - osrc - 1);
+}
+#define strlcpy	strlcpy_compat
 static void
 closefrom_compat(int lowfd)
 {
