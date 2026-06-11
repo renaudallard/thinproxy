@@ -2507,6 +2507,13 @@ setup_seccomp(void)
 		SC_ALLOW(__NR_poll),
 #endif
 		SC_ALLOW(__NR_ppoll),
+		/*
+		 * The kernel resumes a stopped-then-continued poll/futex via
+		 * restart_syscall (SIGSTOP/SIGCONT, container pause, freezer).
+		 * On x86_64/i386 libc issues the real poll syscall, so without
+		 * this the event loop would be SIGSYS-killed on resume.
+		 */
+		SC_ALLOW(__NR_restart_syscall),
 
 		/* process */
 #ifdef __NR_fork
