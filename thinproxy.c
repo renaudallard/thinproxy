@@ -2228,6 +2228,18 @@ reap_timeouts(void)
 			continue;
 		if (c->state == S_SPLICED)
 			continue;
+		/*
+		 * Do not reap a connection still resolving: closing it here
+		 * would not interrupt the child blocked in getaddrinfo (it only
+		 * sees EPIPE once it returns and writes), leaving an orphan that
+		 * can outlive its slot and let children pile up past
+		 * max_connections.  getaddrinfo bounds its own runtime, so the
+		 * parent always collects the child; this caps live children at
+		 * the connection limit.  A client that gives up is still
+		 * detected via POLLHUP on its fd and closed.
+		 */
+		if (c->state == S_RESOLVING)
+			continue;
 		if (now - c->atime > cfg_timeout) {
 			if (log_flags & LOGF_REQUESTS)
 				log_conn(LOG_INFO, c, "TIMEOUT", NULL);
