@@ -8,6 +8,10 @@ ExecStart=/usr/local/bin/thinproxy
 Restart=on-failure
 RestartSec=5
 
+# Each connection can hold two descriptors, so the 512-connection
+# default needs more than the common 1024 soft limit.
+LimitNOFILE=2048
+
 # Security hardening
 NoNewPrivileges=yes
 ProtectSystem=strict
