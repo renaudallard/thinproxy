@@ -1117,14 +1117,17 @@ parse_hostport(const char *s, const char *end,
 			return -1;
 		memcpy(host, s + 1, n);
 		host[n] = '\0';
-		if (col + 1 < end && col[1] == ':') {
+		if (col + 1 == end) {
+			strlcpy(port, defport, psz);
+		} else if (col[1] == ':') {
 			n = (size_t)(end - col - 2);
 			if (n == 0 || n >= psz)
 				return -1;
 			memcpy(port, col + 2, n);
 			port[n] = '\0';
 		} else {
-			strlcpy(port, defport, psz);
+			/* anything after ] other than :port is malformed */
+			return -1;
 		}
 	} else {
 		col = memchr(s, ':', (size_t)(end - s));
