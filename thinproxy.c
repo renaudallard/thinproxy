@@ -1198,6 +1198,12 @@ parse_hostport(const char *s, const char *end,
 			return -1;
 		memcpy(host, s + 1, n);
 		host[n] = '\0';
+		{
+			/* brackets are reserved for IPv6 literals, RFC 3986 sec 3.2.2 */
+			struct in6_addr tmp6;
+			if (inet_pton(AF_INET6, host, &tmp6) != 1)
+				return -1;
+		}
 		if (col + 1 == end) {
 			strlcpy(port, defport, psz);
 		} else if (col[1] == ':') {
