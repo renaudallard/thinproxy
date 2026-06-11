@@ -182,7 +182,10 @@ Block connections to private and reserved destination addresses.
 This includes RFC 1918 private ranges (10/8, 172.16/12, 192.168/16),
 loopback (127/8, ::1), link-local (169.254/16, fe80::/10),
 shared address space (100.64/10), unique local IPv6 (fc00::/7),
-multicast, and reserved ranges.
+deprecated site-local IPv6 (fec0::/10), multicast, IETF protocol
+assignments (192.0.0/24), benchmarking (198.18/15), 6to4 relay anycast
+(192.88.99/24), and the documentation ranges (192.0.2/24, 198.51.100/24,
+203.0.113/24).
 IPv4-mapped IPv6 addresses, IPv4-compatible
 .Pq Li ::a.b.c.d
 and 6to4

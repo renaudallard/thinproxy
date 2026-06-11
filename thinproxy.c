@@ -711,8 +711,26 @@ is_private_v4(uint32_t a)
 	/* 172.16.0.0/12 */
 	if ((a & 0xfff00000) == 0xac100000)
 		return 1;
+	/* 192.0.0.0/24 IETF protocol assignments (RFC 6890) */
+	if ((a & 0xffffff00) == 0xc0000000)
+		return 1;
+	/* 192.0.2.0/24 TEST-NET-1 (RFC 5737) */
+	if ((a & 0xffffff00) == 0xc0000200)
+		return 1;
+	/* 192.88.99.0/24 6to4 relay anycast (RFC 7526) */
+	if ((a & 0xffffff00) == 0xc0586300)
+		return 1;
 	/* 192.168.0.0/16 */
 	if ((a >> 16) == 0xc0a8)
+		return 1;
+	/* 198.18.0.0/15 benchmarking (RFC 2544) */
+	if ((a & 0xfffe0000) == 0xc6120000)
+		return 1;
+	/* 198.51.100.0/24 TEST-NET-2 (RFC 5737) */
+	if ((a & 0xffffff00) == 0xc6336400)
+		return 1;
+	/* 203.0.113.0/24 TEST-NET-3 (RFC 5737) */
+	if ((a & 0xffffff00) == 0xcb007100)
 		return 1;
 	/* 224.0.0.0/3 multicast + reserved */
 	if (a >= 0xe0000000)
@@ -735,6 +753,9 @@ is_private_addr(struct sockaddr *sa)
 		if (IN6_IS_ADDR_LOOPBACK(&sin6->sin6_addr))
 			return 1;
 		if (IN6_IS_ADDR_LINKLOCAL(&sin6->sin6_addr))
+			return 1;
+		/* fec0::/10 deprecated site-local (RFC 3879) */
+		if (b[0] == 0xfe && (b[1] & 0xc0) == 0xc0)
 			return 1;
 		/* fc00::/7 unique local */
 		if ((b[0] & 0xfe) == 0xfc)
