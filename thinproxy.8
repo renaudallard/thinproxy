@@ -194,11 +194,13 @@ assignments (192.0.0/24), benchmarking (198.18/15), 6to4 relay anycast
 (192.88.99/24), and the documentation ranges (192.0.2/24, 198.51.100/24,
 203.0.113/24).
 IPv4-mapped IPv6 addresses, IPv4-compatible
-.Pq Li ::a.b.c.d
-and 6to4
-.Pq Li 2002::/16
-addresses that embed a private IPv4 destination, and the RFC 6052
-well-known NAT64 prefix
+.Pq Li ::a.b.c.d ,
+6to4
+.Pq Li 2002::/16 ,
+Teredo
+.Pq Li 2001:0000::/32 ,
+and ISATAP addresses that embed a private IPv4 destination, and the
+RFC 6052 well-known NAT64 prefix
 .Pa 64:ff9b::/96
 are also checked.
 The default is

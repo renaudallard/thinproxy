@@ -790,6 +790,19 @@ is_private_addr(struct sockaddr *sa)
 		struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)sa;
 		uint8_t *b = sin6->sin6_addr.s6_addr;
 
+		/*
+		 * An operator-configured NAT64 /96 is checked first so that a
+		 * prefix inside fc00::/7 or fec0::/10 is classified by its
+		 * embedded IPv4 rather than being swallowed by the generic
+		 * unique-local or site-local checks below.
+		 */
+		if (cfg_nat64_set &&
+		    memcmp(b, &cfg_nat64_prefix, 12) == 0) {
+			uint32_t v4;
+			memcpy(&v4, b + 12, 4);
+			return is_private_v4(ntohl(v4));
+		}
+
 		if (IN6_IS_ADDR_LOOPBACK(&sin6->sin6_addr))
 			return 1;
 		if (IN6_IS_ADDR_LINKLOCAL(&sin6->sin6_addr))
@@ -820,13 +833,6 @@ is_private_addr(struct sockaddr *sa)
 			memcpy(&v4, b + 12, 4);
 			return is_private_v4(ntohl(v4));
 		}
-		/* operator-configured NAT64 /96 prefix */
-		if (cfg_nat64_set &&
-		    memcmp(b, &cfg_nat64_prefix, 12) == 0) {
-			uint32_t v4;
-			memcpy(&v4, b + 12, 4);
-			return is_private_v4(ntohl(v4));
-		}
 		/*
 		 * IPv4-compatible ::a.b.c.d (deprecated, RFC 4291).  Loopback
 		 * and the unspecified address are already handled above, so a
@@ -844,6 +850,27 @@ is_private_addr(struct sockaddr *sa)
 		if (b[0] == 0x20 && b[1] == 0x02) {
 			uint32_t v4;
 			memcpy(&v4, b + 2, 4);
+			return is_private_v4(ntohl(v4));
+		}
+		/*
+		 * Teredo 2001:0000::/32 (RFC 4380) carries the client's IPv4
+		 * in the low 32 bits, obfuscated by a bitwise NOT.
+		 */
+		if (b[0] == 0x20 && b[1] == 0x01 &&
+		    b[2] == 0x00 && b[3] == 0x00) {
+			uint32_t v4;
+			memcpy(&v4, b + 12, 4);
+			return is_private_v4(ntohl(~v4));
+		}
+		/*
+		 * ISATAP interface identifier ::0:5efe:a.b.c.d or
+		 * ::200:5efe:a.b.c.d (RFC 5214) embeds an IPv4 in the low 32
+		 * bits regardless of the /64 prefix.
+		 */
+		if ((b[8] == 0x00 || b[8] == 0x02) && b[9] == 0x00 &&
+		    b[10] == 0x5e && b[11] == 0xfe) {
+			uint32_t v4;
+			memcpy(&v4, b + 12, 4);
 			return is_private_v4(ntohl(v4));
 		}
 		return 0;
