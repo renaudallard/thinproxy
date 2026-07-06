@@ -2515,24 +2515,19 @@ event_loop(int lfd)
 					conn_close(c);
 				break;
 			case S_RELAY:
-				if (rev & POLLIN)
-					handle_relay_read(c, fd);
-				if (fdmap[fd] != NULL && (rev & POLLOUT))
-					handle_relay_write(c, fd);
 				/*
-				 * On a transport error (e.g. peer RST) the
-				 * errored fd is dead: close it and drop the data
-				 * bound for it, but keep the connection alive to
-				 * flush what is already buffered toward the
-				 * surviving peer instead of discarding it.  The
-				 * fd is closed rather than masked because POLLERR
-				 * and POLLHUP are reported regardless of the
+				 * Handle a transport error (e.g. peer RST) before
+				 * the read and write handlers: the errored fd is
+				 * dead, so close it and drop the data bound for it,
+				 * but keep the connection alive to flush what is
+				 * already buffered toward the surviving peer rather
+				 * than letting a read on the reset fd discard it.
+				 * The fd is closed rather than masked because
+				 * POLLERR and POLLHUP are reported regardless of the
 				 * event mask, so a dead fd left in the poll set
-				 * would wake poll() every iteration and spin the
-				 * loop.  POLLERR is handled before POLLHUP so a
-				 * reset (which raises both) takes this path.
+				 * would wake poll() every iteration and spin.
 				 */
-				if (fdmap[fd] != NULL && (rev & POLLERR)) {
+				if (rev & POLLERR) {
 					if (fd == c->cfd) {
 						c->s2c_len = 0;
 						c->s2c_off = 0;
@@ -2550,6 +2545,10 @@ event_loop(int lfd)
 					c->seof = 1;
 					conn_update_poll(c);
 				}
+				if (fdmap[fd] != NULL && (rev & POLLIN))
+					handle_relay_read(c, fd);
+				if (fdmap[fd] != NULL && (rev & POLLOUT))
+					handle_relay_write(c, fd);
 				/*
 				 * A hung-up fd may still hold bytes the peer
 				 * queued before the hangup; POLLIN can be masked
