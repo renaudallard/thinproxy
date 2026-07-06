@@ -262,6 +262,9 @@ struct conn {
 	size_t		req_len;
 
 	time_t		atime;		/* last activity */
+
+	struct conn	*next;		/* list of all live connections */
+	struct conn	*prev;
 };
 
 /* globals */
@@ -271,6 +274,7 @@ static nfds_t			npfds;
 static struct conn		*fdmap[MAX_FDS];
 static int			fdtype_arr[MAX_FDS];
 static int			fd_pidx[MAX_FDS];
+static struct conn		*conn_head;	/* all live connections */
 static int			nconns;
 static int			accept_paused;
 static time_t			now;
@@ -454,6 +458,14 @@ conn_close(struct conn *c)
 		poll_del(c->sfd);
 		close(c->sfd);
 	}
+
+	if (c->prev != NULL)
+		c->prev->next = c->next;
+	else
+		conn_head = c->next;
+	if (c->next != NULL)
+		c->next->prev = c->prev;
+
 	free(c);
 	nconns--;
 	accept_paused = 0;
@@ -478,6 +490,11 @@ conn_alloc(int cfd)
 	c->rfd = -1;
 	c->state = S_REQUEST;
 	c->atime = now;
+
+	c->next = conn_head;
+	if (conn_head != NULL)
+		conn_head->prev = c;
+	conn_head = c;
 	nconns++;
 	return c;
 }
@@ -692,7 +709,8 @@ extract_v4(struct sockaddr *sa, struct in_addr *out)
 static int
 per_ip_check(struct sockaddr *sa)
 {
-	int fd, count;
+	int count;
+	struct conn *c;
 	struct in_addr new_v4;
 	int new_is_v4;
 
@@ -702,13 +720,13 @@ per_ip_check(struct sockaddr *sa)
 	new_is_v4 = extract_v4(sa, &new_v4);
 
 	count = 0;
-	for (fd = 0; fd < MAX_FDS; fd++) {
-		struct conn *c = fdmap[fd];
+	/*
+	 * Count by stored peer address over the live-connection list, so a
+	 * half-closed relay whose client fd was already torn down still
+	 * counts against the limit and cannot be used to accumulate slots.
+	 */
+	for (c = conn_head; c != NULL; c = c->next) {
 		struct in_addr peer_v4;
-		if (c == NULL || fdtype_arr[fd] != FD_CLIENT)
-			continue;
-		if (c->cfd != fd)
-			continue;
 		if (new_is_v4) {
 			if (extract_v4((struct sockaddr *)&c->peer,
 			    &peer_v4) &&
@@ -2316,7 +2334,7 @@ accept_conn(int lfd)
 static void
 reap_timeouts(void)
 {
-	int fd;
+	struct conn *c, *nextc;
 
 	/*
 	 * Periodically retry accept after EMFILE/ENFILE.  Without a live
@@ -2325,12 +2343,13 @@ reap_timeouts(void)
 	 */
 	accept_paused = 0;
 
-	for (fd = 0; fd < MAX_FDS; fd++) {
-		struct conn *c = fdmap[fd];
-		if (c == NULL || fdtype_arr[fd] == FD_LISTEN)
-			continue;
-		if (c->cfd != fd)
-			continue;
+	/*
+	 * Walk the live-connection list rather than fdmap: a relay whose
+	 * client fd was torn down (cfd == -1) is reachable only here, and
+	 * must still be reaped so its slot is freed.
+	 */
+	for (c = conn_head; c != NULL; c = nextc) {
+		nextc = c->next;
 		if (c->state == S_SPLICED)
 			continue;
 		/*
@@ -3126,10 +3145,8 @@ main(int argc, char *argv[])
 	event_loop(lfd);
 
 	logmsg(LOG_INFO, "shutting down");
-	for (i = 0; i < MAX_FDS; i++) {
-		if (fdmap[i] != NULL && fdtype_arr[i] == FD_CLIENT)
-			conn_close(fdmap[i]);
-	}
+	while (conn_head != NULL)
+		conn_close(conn_head);
 	close(lfd);
 
 	if (use_syslog)
