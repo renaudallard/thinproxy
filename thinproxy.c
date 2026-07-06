@@ -2137,12 +2137,18 @@ conn_update_poll(struct conn *c)
 		c->cshut = 1;
 	}
 
-	if (!c->ceof && c->c2s_off + c->c2s_len < BUF_SIZE)
+	/*
+	 * Gate the read re-arm on buffered length, not off + len:
+	 * handle_relay_read compacts before reading, so any len below
+	 * BUF_SIZE leaves usable space.  Testing off + len would keep
+	 * POLLIN masked for the whole drain of a once-full buffer.
+	 */
+	if (!c->ceof && c->c2s_len < BUF_SIZE)
 		cev |= POLLIN;
 	if (c->s2c_len > 0)
 		cev |= POLLOUT;
 
-	if (!c->seof && c->s2c_off + c->s2c_len < BUF_SIZE)
+	if (!c->seof && c->s2c_len < BUF_SIZE)
 		sev |= POLLIN;
 	if (c->c2s_len > 0)
 		sev |= POLLOUT;
@@ -2470,31 +2476,72 @@ event_loop(int lfd)
 					handle_relay_read(c, fd);
 				if (fdmap[fd] != NULL && (rev & POLLOUT))
 					handle_relay_write(c, fd);
-				if (fdmap[fd] != NULL &&
-				    (rev & POLLHUP) && !(rev & POLLIN)) {
-					if (fd == c->cfd)
-						c->ceof = 1;
-					else
-						c->seof = 1;
-					conn_update_poll(c);
-				}
 				/*
-				 * On a transport error (e.g. peer RST) drop the
-				 * data bound for the failed fd, then flush what
-				 * is already buffered toward the surviving peer
-				 * before tearing down instead of discarding it.
+				 * On a transport error (e.g. peer RST) the
+				 * errored fd is dead: close it and drop the data
+				 * bound for it, but keep the connection alive to
+				 * flush what is already buffered toward the
+				 * surviving peer instead of discarding it.  The
+				 * fd is closed rather than masked because POLLERR
+				 * and POLLHUP are reported regardless of the
+				 * event mask, so a dead fd left in the poll set
+				 * would wake poll() every iteration and spin the
+				 * loop.  POLLERR is handled before POLLHUP so a
+				 * reset (which raises both) takes this path.
 				 */
 				if (fdmap[fd] != NULL && (rev & POLLERR)) {
 					if (fd == c->cfd) {
 						c->s2c_len = 0;
 						c->s2c_off = 0;
+						poll_del(c->cfd);
+						close(c->cfd);
+						c->cfd = -1;
 					} else {
 						c->c2s_len = 0;
 						c->c2s_off = 0;
+						poll_del(c->sfd);
+						close(c->sfd);
+						c->sfd = -1;
 					}
 					c->ceof = 1;
 					c->seof = 1;
 					conn_update_poll(c);
+				}
+				/*
+				 * A hung-up fd may still hold bytes the peer
+				 * queued before the hangup; POLLIN can be masked
+				 * off when the far buffer is full, so drain here
+				 * instead of declaring EOF blind, which would
+				 * truncate the relayed stream.  A hung-up socket
+				 * is never writable (POSIX), so once its receive
+				 * side is fully drained the fd is finished both
+				 * ways: close it (stopping its sticky POLLHUP
+				 * from spinning the loop), drop the now
+				 * undeliverable outbound buffer, and let the
+				 * other direction flush before teardown.
+				 */
+				if (fdmap[fd] != NULL &&
+				    (rev & POLLHUP) && !(rev & POLLIN)) {
+					handle_relay_read(c, fd);
+					if (fdmap[fd] != NULL &&
+					    fd == c->cfd && c->ceof) {
+						c->s2c_len = 0;
+						c->s2c_off = 0;
+						poll_del(c->cfd);
+						close(c->cfd);
+						c->cfd = -1;
+						c->seof = 1;
+						conn_update_poll(c);
+					} else if (fdmap[fd] != NULL &&
+					    fd == c->sfd && c->seof) {
+						c->c2s_len = 0;
+						c->c2s_off = 0;
+						poll_del(c->sfd);
+						close(c->sfd);
+						c->sfd = -1;
+						c->ceof = 1;
+						conn_update_poll(c);
+					}
 				}
 				break;
 			case S_SPLICED: {
