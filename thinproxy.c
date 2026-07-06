@@ -1439,25 +1439,36 @@ parse_request(const char *req, size_t len,
 		if (parse_hostport(h, hend, host, hsz,
 		    port, psz, "80") == -1)
 			return -1;
-		if (sep == NULL) {
+		if (sep == NULL || *sep == '#') {
+			/*
+			 * No path/query, or a bare fragment: a fragment is
+			 * never part of the request-target (RFC 7230 sec 5.3),
+			 * so forward only the origin-form root.
+			 */
 			strlcpy(path, "/", pathsz);
-		} else if (*sep == '/') {
-			n = (size_t)(uend - sep);
-			if (n >= pathsz)
-				return -1;
-			memcpy(path, sep, n);
-			path[n] = '\0';
 		} else {
 			/*
-			 * Origin-form needs a leading '/', so synthesize one
-			 * ahead of the query/fragment (http://h?q -> /?q).
+			 * The path ends at the first '#' so the fragment is
+			 * not forwarded.  Origin-form also needs a leading
+			 * '/', so synthesize one when the target starts at
+			 * '?' (http://h?q -> /?q).
 			 */
-			n = (size_t)(uend - sep);
-			if (n + 1 >= pathsz)
-				return -1;
-			path[0] = '/';
-			memcpy(path + 1, sep, n);
-			path[n + 1] = '\0';
+			const char *pend = sep;
+			while (pend < uend && *pend != '#')
+				pend++;
+			n = (size_t)(pend - sep);
+			if (*sep == '/') {
+				if (n >= pathsz)
+					return -1;
+				memcpy(path, sep, n);
+				path[n] = '\0';
+			} else {
+				if (n + 1 >= pathsz)
+					return -1;
+				path[0] = '/';
+				memcpy(path + 1, sep, n);
+				path[n + 1] = '\0';
+			}
 		}
 	}
 
