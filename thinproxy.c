@@ -2169,6 +2169,17 @@ conn_update_poll(struct conn *c)
 		return;
 	}
 
+	/*
+	 * A relay with no descriptor left actively in the poll set can make
+	 * no progress: both are closed, or hung up and parked, so a buffer
+	 * still bound for one of them can never drain.  Tear it down now
+	 * rather than waiting for the idle reaper.
+	 */
+	if ((c->cfd < 0 || c->chup) && (c->sfd < 0 || c->shup)) {
+		conn_close(c);
+		return;
+	}
+
 	if (c->ceof && c->c2s_len == 0 && !c->sshut && c->sfd >= 0) {
 		(void)shutdown(c->sfd, SHUT_WR);
 		c->sshut = 1;
@@ -2202,7 +2213,7 @@ conn_update_poll(struct conn *c)
 	 */
 	if (c->cfd >= 0) {
 		if (c->chup) {
-			if (c->c2s_len < BUF_SIZE) {
+			if (!c->ceof && c->c2s_len < BUF_SIZE) {
 				c->chup = 0;
 				(void)poll_add(c->cfd, POLLIN, c, FD_CLIENT);
 			}
@@ -2212,7 +2223,7 @@ conn_update_poll(struct conn *c)
 	}
 	if (c->sfd >= 0) {
 		if (c->shup) {
-			if (c->s2c_len < BUF_SIZE) {
+			if (!c->seof && c->s2c_len < BUF_SIZE) {
 				c->shup = 0;
 				(void)poll_add(c->sfd, POLLIN, c, FD_SERVER);
 			}
@@ -2611,14 +2622,17 @@ event_loop(int lfd)
 						 * hung-up client fd out of the poll set so
 						 * its sticky POLLHUP stops spinning the
 						 * loop.  conn_update_poll re-arms it once
-						 * c2s drains, resuming the drain.
+						 * c2s drains, or tears the connection down
+						 * if the peer can no longer drain it.
 						 */
 						c->chup = 1;
 						poll_del(c->cfd);
+						conn_update_poll(c);
 					} else if (fdmap[fd] != NULL &&
 					    fd == c->sfd) {
 						c->shup = 1;
 						poll_del(c->sfd);
+						conn_update_poll(c);
 					}
 				}
 				break;
