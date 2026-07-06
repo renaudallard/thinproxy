@@ -1,3 +1,20 @@
+thinproxy (0.2.5-1) unstable; urgency=low
+
+  * Track live connections in a list so a relay whose client fd was torn
+    down is still idle-reaped and counted against the per-IP limit,
+    fixing a connection-slot leak introduced in 0.2.4 that let one source
+    exhaust max_connections and wedge the listener.
+  * Park a hung-up relay descriptor that cannot be drained because the
+    far buffer is full, instead of busy-looping the event loop on its
+    sticky POLLHUP; it is re-armed once the buffer drains.
+  * Handle a relay transport error before the read and write handlers so
+    data already buffered toward the surviving peer is flushed on a reset
+    rather than discarded.
+  * Harden build_request snprintf accounting against a negative return,
+    report an inverted strtonum range as invalid, and include stdint.h.
+
+ -- Renaud Allard <renaud@allard.it>  Mon, 06 Jul 2026 19:52:44 +0200
+
 thinproxy (0.2.4-1) unstable; urgency=low
 
   * Drain a half-closed relay socket before signalling EOF so a full
