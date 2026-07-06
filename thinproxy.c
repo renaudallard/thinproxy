@@ -44,6 +44,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 #include <string.h>
 #include <strings.h>
 #include <syslog.h>
@@ -144,8 +145,8 @@ closefrom_compat(int lowfd)
 
 	hi = MAX_FDS;
 	if (getrlimit(RLIMIT_NOFILE, &rl) == 0 &&
-	    rl.rlim_cur != RLIM_INFINITY && (long)rl.rlim_cur > hi)
-		hi = (int)rl.rlim_cur;
+	    rl.rlim_cur != RLIM_INFINITY && rl.rlim_cur > (rlim_t)hi)
+		hi = rl.rlim_cur > (rlim_t)INT_MAX ? INT_MAX : (int)rl.rlim_cur;
 	for (fd = lowfd; fd < hi; fd++)
 		(void)close(fd);
 }
@@ -154,22 +155,37 @@ static long long
 strtonum_compat(const char *numstr, long long minval, long long maxval,
     const char **errstrp)
 {
-	long long ll;
+	long long ll = 0;
 	char *ep;
+	int save_errno = errno;
+	int error = 0;
+	const char *errstr = NULL;
 
 	errno = 0;
 	ll = strtoll(numstr, &ep, 10);
-	if (numstr == ep || *ep != '\0')
-		*errstrp = "invalid";
-	else if (ll < minval)
-		*errstrp = "too small";
-	else if (ll > maxval)
-		*errstrp = "too large";
-	else {
-		*errstrp = NULL;
-		return ll;
+	if (numstr == ep || *ep != '\0') {
+		errstr = "invalid";
+		error = EINVAL;
+	} else if ((ll == LLONG_MIN && errno == ERANGE) || ll < minval) {
+		errstr = "too small";
+		error = ERANGE;
+	} else if ((ll == LLONG_MAX && errno == ERANGE) || ll > maxval) {
+		errstr = "too large";
+		error = ERANGE;
 	}
-	return 0;
+
+	/*
+	 * strtonum(3) tolerates a NULL errstr, sets errno to EINVAL/ERANGE
+	 * on failure, and leaves the caller's errno untouched on success.
+	 */
+	if (errstrp != NULL)
+		*errstrp = errstr;
+	if (errstr != NULL) {
+		errno = error;
+		return 0;
+	}
+	errno = save_errno;
+	return ll;
 }
 #define strtonum	strtonum_compat
 #endif
