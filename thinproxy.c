@@ -539,12 +539,36 @@ acl_add(const char *cidr)
 			return -1;
 		}
 	} else if (inet_pton(AF_INET6, buf, &e->addr.v6) == 1) {
-		e->family = AF_INET6;
-		if (e->prefixlen == -1)
-			e->prefixlen = 128;
-		if (e->prefixlen < 0 || e->prefixlen > 128) {
-			logmsg(LOG_ERR, "invalid prefix length: %s", cidr);
-			return -1;
+		/*
+		 * acl_check canonicalizes an IPv4-mapped peer (::ffff:a.b.c.d)
+		 * to a native AF_INET address before matching, so a rule
+		 * written in mapped form must be stored as AF_INET too or it
+		 * would never match.  A supplied prefix is in IPv6 terms; the
+		 * matching v4 prefix is prefixlen - 96.
+		 */
+		if (IN6_IS_ADDR_V4MAPPED(&e->addr.v6)) {
+			struct in_addr v4;
+			memcpy(&v4, e->addr.v6.s6_addr + 12, sizeof(v4));
+			e->addr.v4 = v4;
+			e->family = AF_INET;
+			if (e->prefixlen == -1)
+				e->prefixlen = 32;
+			else if (e->prefixlen >= 96)
+				e->prefixlen -= 96;
+			else {
+				logmsg(LOG_ERR, "invalid prefix length: %s",
+				    cidr);
+				return -1;
+			}
+		} else {
+			e->family = AF_INET6;
+			if (e->prefixlen == -1)
+				e->prefixlen = 128;
+			if (e->prefixlen < 0 || e->prefixlen > 128) {
+				logmsg(LOG_ERR, "invalid prefix length: %s",
+				    cidr);
+				return -1;
+			}
 		}
 	} else {
 		logmsg(LOG_ERR, "invalid address: %s", cidr);
