@@ -235,6 +235,11 @@ directive is present, CONNECT requests to unlisted ports are denied
 with 403 Forbidden.
 The default allows port 443 only.
 Config entries replace the defaults.
+This restriction applies only to the CONNECT method; plain HTTP requests
+to an absolute URI are governed by
+.Cm deny_private ,
+not by
+.Cm connect_port .
 .It Cm allow Ar address Ns Op / Ns Ar prefix
 Allow connections from
 .Ar address .
@@ -341,6 +346,9 @@ restricts system calls to an allowlist matching the
 promises: I/O, networking, DNS resolution, and process forking.
 Violations log the blocked syscall number to standard error before
 terminating the process.
+The filter is installed on x86_64 and aarch64; on other architectures it
+is skipped with a warning logged at startup, and the remaining
+protections such as privilege dropping still apply.
 .Pp
 .Nm
 does not inspect, decrypt, or modify HTTPS traffic.

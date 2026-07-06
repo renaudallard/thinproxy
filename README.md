@@ -142,6 +142,10 @@ See `thinproxy.conf.example` for a full example.
 | `allow` | Allow source address/CIDR (whitelist mode) | |
 | `deny` | Deny source address/CIDR (blacklist mode) | |
 
+`connect_port` restricts only the CONNECT (HTTPS tunnel) method. Plain
+HTTP forwarding to an absolute URI is governed by `deny_private`, not by
+`connect_port`.
+
 ### Access Control
 
 Use `allow` or `deny` directives, but not both.
@@ -210,8 +214,8 @@ the authority from the request-target (RFC 7230 §5.4), so a client-supplied
 
 ### Linux
 
-- seccomp-BPF restricts syscalls to an allowlist (I/O, networking, DNS, process forking); violations are logged with the blocked syscall number
-- Supports x86_64 and aarch64
+- seccomp-BPF restricts syscalls to an allowlist (I/O, networking, DNS, process forking) on x86_64 and aarch64; violations are logged with the blocked syscall number
+- On other Linux architectures the seccomp filter is not applied (a warning is logged at startup); privilege dropping and the other defenses still apply
 - POSIX-compatible fallbacks for BSD-specific functions
 - Packages available as `.deb`, `.rpm`, `.apk`, and static binaries
 
