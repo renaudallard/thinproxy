@@ -249,6 +249,8 @@ struct conn {
 	int		seof;		/* server EOF received */
 	int		cshut;		/* SHUT_WR done on client fd */
 	int		sshut;		/* SHUT_WR done on server fd */
+	int		chup;		/* client fd hung up, parked off poll set */
+	int		shup;		/* server fd hung up, parked off poll set */
 
 	uint8_t		c2s[BUF_SIZE];	/* client-to-server buffer */
 	size_t		c2s_off;
@@ -2171,10 +2173,32 @@ conn_update_poll(struct conn *c)
 	if (c->c2s_len > 0)
 		sev |= POLLOUT;
 
-	if (c->cfd >= 0)
-		poll_mod(c->cfd, cev);
-	if (c->sfd >= 0)
-		poll_mod(c->sfd, sev);
+	/*
+	 * A hung-up fd parked out of the poll set (chup/shup) is re-added
+	 * for reading once its buffer drains, so the bytes queued before the
+	 * hangup still get drained without a sticky POLLHUP spinning the
+	 * loop in the meantime.
+	 */
+	if (c->cfd >= 0) {
+		if (c->chup) {
+			if (c->c2s_len < BUF_SIZE) {
+				c->chup = 0;
+				(void)poll_add(c->cfd, POLLIN, c, FD_CLIENT);
+			}
+		} else {
+			poll_mod(c->cfd, cev);
+		}
+	}
+	if (c->sfd >= 0) {
+		if (c->shup) {
+			if (c->s2c_len < BUF_SIZE) {
+				c->shup = 0;
+				(void)poll_add(c->sfd, POLLIN, c, FD_SERVER);
+			}
+		} else {
+			poll_mod(c->sfd, sev);
+		}
+	}
 }
 
 static void
@@ -2560,6 +2584,21 @@ event_loop(int lfd)
 						c->sfd = -1;
 						c->ceof = 1;
 						conn_update_poll(c);
+					} else if (fdmap[fd] != NULL &&
+					    fd == c->cfd) {
+						/*
+						 * Cannot drain now (c2s full): park the
+						 * hung-up client fd out of the poll set so
+						 * its sticky POLLHUP stops spinning the
+						 * loop.  conn_update_poll re-arms it once
+						 * c2s drains, resuming the drain.
+						 */
+						c->chup = 1;
+						poll_del(c->cfd);
+					} else if (fdmap[fd] != NULL &&
+					    fd == c->sfd) {
+						c->shup = 1;
+						poll_del(c->sfd);
 					}
 				}
 				break;
