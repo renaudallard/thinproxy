@@ -1,3 +1,25 @@
+thinproxy (0.2.4-1) unstable; urgency=low
+
+  * Drain a half-closed relay socket before signalling EOF so a full
+    buffer no longer truncates the forwarded stream.
+  * Close descriptors that have hung up or taken a transport error
+    instead of leaving them in the poll set, which spun the event loop
+    at full CPU until the peer drained or the connection timed out.
+  * Replace the client Host header with the request-target authority on
+    forwarded requests (RFC 7230 5.4) and accept a request without a
+    Host, giving it the synthesized one.
+  * Strip the URI fragment from the forwarded request-target.
+  * Match access-control rules written in IPv4-mapped form
+    (::ffff:a.b.c.d).
+  * Unwrap an operator NAT64 prefix inside fc00::/7 or fec0::/10 and
+    block private IPv4 embedded in Teredo and ISATAP addresses.
+  * Honor -V regardless of config validity and reject an empty -u
+    argument that would have silently skipped the privilege drop.
+  * Align the strtonum and closefrom compatibility shims with their
+    OpenBSD semantics.
+
+ -- Renaud Allard <renaud@allard.it>  Mon, 06 Jul 2026 17:35:48 +0200
+
 thinproxy (0.2.3-1) unstable; urgency=low
 
   * Replace the snprintf-based strlcpy shim with a real bounded copy so
