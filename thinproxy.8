@@ -262,7 +262,11 @@ Cannot be mixed with
 .El
 .Sh OPERATION
 For HTTP requests, the proxy rewrites the absolute URI to a relative
-path, strips hop-by-hop headers
+path, replaces the
+.Cm Host
+header with the authority from the request-target
+.Pq RFC 7230 sec 5.4 ,
+strips hop-by-hop headers
 .Pq Proxy-Connection, Proxy-Authorization, Keep-Alive, Trailer, Upgrade ,
 forces
 .Cm Connection: close ,
@@ -279,11 +283,7 @@ duplicate
 .Cm Content-Length ,
 or
 .Cm Transfer-Encoding
-headers; a missing
-.Cm Host
-header on a forwarded
-.Pq non-CONNECT
-request; a
+headers; a
 .Cm Transfer-Encoding
 value other than
 .Cm chunked ;

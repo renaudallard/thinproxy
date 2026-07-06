@@ -1489,16 +1489,17 @@ parse_request(const char *req, size_t len,
 
 /*
  * Build a modified HTTP request for upstream forwarding.
- * Replaces absolute URI with path, adds Connection: close,
- * strips hop-by-hop proxy headers.  Rejects obs-fold and any
- * combination of Transfer-Encoding and Content-Length, both of
- * which are request-smuggling vectors (RFC 7230 sec 3.3.3).
+ * Replaces the absolute URI with the origin-form path and the client
+ * Host with the request-target authority (hosthdr), adds
+ * Connection: close, and strips hop-by-hop proxy headers.  Rejects
+ * obs-fold and any combination of Transfer-Encoding and Content-Length,
+ * both of which are request-smuggling vectors (RFC 7230 sec 3.3.3).
  * Returns bytes written to buf, or -1 on error.
  */
 static ssize_t
 build_request(const char *req, size_t reqlen,
     uint8_t *buf, size_t bufsz,
-    const char *method, const char *path)
+    const char *method, const char *path, const char *hosthdr)
 {
 	const char *p, *end, *lend, *ver, *colon;
 	size_t n = 0;
@@ -1523,6 +1524,15 @@ build_request(const char *req, size_t reqlen,
 	if (n >= bufsz)
 		return -1;
 
+	/*
+	 * Emit the Host from the request-target authority, replacing any
+	 * client-supplied Host (dropped below), per RFC 7230 sec 5.4.
+	 */
+	n += (size_t)snprintf((char *)buf + n, bufsz - n, "Host: %s\r\n",
+	    hosthdr);
+	if (n >= bufsz)
+		return -1;
+
 	p = lend + 2;
 	while (p < end) {
 		lend = memchr(p, '\r', (size_t)(end - p));
@@ -1530,14 +1540,6 @@ build_request(const char *req, size_t reqlen,
 			break;
 
 		if (lend == p) {
-			/*
-			 * The authority is rewritten to origin-form, so a
-			 * forwarded HTTP/1.1 request without a Host header
-			 * would be unroutable upstream.  RFC 7230 sec 5.4
-			 * requires it; reject when absent.
-			 */
-			if (!have_host)
-				return -1;
 			if (!have_conn) {
 				size_t w = (size_t)snprintf((char *)buf + n,
 				    bufsz - n, "Connection: close\r\n");
@@ -1626,9 +1628,16 @@ build_request(const char *req, size_t reqlen,
 				return -1;
 			have_te = 1;
 		} else if (prefix_ci(p, (size_t)(lend - p), "Host:")) {
+			/*
+			 * Drop the client Host: the authority from the
+			 * request-target was already emitted above.  A
+			 * duplicate is still rejected as a smuggling signal.
+			 */
 			if (have_host)
 				return -1;
 			have_host = 1;
+			p = lend + 2;
+			continue;
 		}
 
 		/* hop-by-hop headers per RFC 7230 sec 6.1 */
@@ -1885,8 +1894,20 @@ handle_request(struct conn *c)
 	}
 
 	if (!is_connect) {
-		ssize_t built = build_request(c->req, c->req_len,
-		    c->c2s, sizeof(c->c2s), method, path);
+		char hosthdr[300];
+		int brk = (strchr(host, ':') != NULL);
+		ssize_t built;
+
+		/* authority for the Host header; drop the default :80 */
+		if (strcmp(port, "80") == 0)
+			snprintf(hosthdr, sizeof(hosthdr),
+			    brk ? "[%s]" : "%s", host);
+		else
+			snprintf(hosthdr, sizeof(hosthdr),
+			    brk ? "[%s]:%s" : "%s:%s", host, port);
+
+		built = build_request(c->req, c->req_len,
+		    c->c2s, sizeof(c->c2s), method, path, hosthdr);
 		if (built == -1) {
 			logmsg(LOG_WARNING, "request build failed");
 			ign_write(c->cfd, ERR_400, sizeof(ERR_400) - 1);
