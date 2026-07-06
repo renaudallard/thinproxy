@@ -45,6 +45,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <stdint.h>
 #include <string.h>
 #include <strings.h>
 #include <syslog.h>
@@ -161,17 +162,24 @@ strtonum_compat(const char *numstr, long long minval, long long maxval,
 	int error = 0;
 	const char *errstr = NULL;
 
-	errno = 0;
-	ll = strtoll(numstr, &ep, 10);
-	if (numstr == ep || *ep != '\0') {
+	if (minval > maxval) {
 		errstr = "invalid";
 		error = EINVAL;
-	} else if ((ll == LLONG_MIN && errno == ERANGE) || ll < minval) {
-		errstr = "too small";
-		error = ERANGE;
-	} else if ((ll == LLONG_MAX && errno == ERANGE) || ll > maxval) {
-		errstr = "too large";
-		error = ERANGE;
+	} else {
+		errno = 0;
+		ll = strtoll(numstr, &ep, 10);
+		if (numstr == ep || *ep != '\0') {
+			errstr = "invalid";
+			error = EINVAL;
+		} else if ((ll == LLONG_MIN && errno == ERANGE) ||
+		    ll < minval) {
+			errstr = "too small";
+			error = ERANGE;
+		} else if ((ll == LLONG_MAX && errno == ERANGE) ||
+		    ll > maxval) {
+			errstr = "too large";
+			error = ERANGE;
+		}
 	}
 
 	/*
@@ -1508,6 +1516,28 @@ parse_request(const char *req, size_t len,
 }
 
 /*
+ * Append a printf-formatted string at buf+*n within bufsz, advancing *n.
+ * Returns 0 on success, -1 on truncation or an snprintf encoding error;
+ * the signed return is checked so a negative value cannot wrap *n.
+ */
+static int
+buf_appendf(char *buf, size_t bufsz, size_t *n, const char *fmt, ...)
+{
+	va_list ap;
+	int r;
+
+	if (*n > bufsz)
+		return -1;
+	va_start(ap, fmt);
+	r = vsnprintf(buf + *n, bufsz - *n, fmt, ap);
+	va_end(ap);
+	if (r < 0 || (size_t)r >= bufsz - *n)
+		return -1;
+	*n += (size_t)r;
+	return 0;
+}
+
+/*
  * Build a modified HTTP request for upstream forwarding.
  * Replaces the absolute URI with the origin-form path and the client
  * Host with the request-target authority (hosthdr), adds
@@ -1539,18 +1569,15 @@ build_request(const char *req, size_t reqlen,
 	if (ver <= req)
 		return -1;
 
-	n = (size_t)snprintf((char *)buf, bufsz, "%s %s %.*s\r\n",
-	    method, path, (int)(lend - ver), ver);
-	if (n >= bufsz)
+	if (buf_appendf((char *)buf, bufsz, &n, "%s %s %.*s\r\n",
+	    method, path, (int)(lend - ver), ver) == -1)
 		return -1;
 
 	/*
 	 * Emit the Host from the request-target authority, replacing any
 	 * client-supplied Host (dropped below), per RFC 7230 sec 5.4.
 	 */
-	n += (size_t)snprintf((char *)buf + n, bufsz - n, "Host: %s\r\n",
-	    hosthdr);
-	if (n >= bufsz)
+	if (buf_appendf((char *)buf, bufsz, &n, "Host: %s\r\n", hosthdr) == -1)
 		return -1;
 
 	p = lend + 2;
@@ -1561,15 +1588,11 @@ build_request(const char *req, size_t reqlen,
 
 		if (lend == p) {
 			if (!have_conn) {
-				size_t w = (size_t)snprintf((char *)buf + n,
-				    bufsz - n, "Connection: close\r\n");
-				n += w;
-				if (n >= bufsz)
+				if (buf_appendf((char *)buf, bufsz, &n,
+				    "Connection: close\r\n") == -1)
 					return -1;
 			}
-			n += (size_t)snprintf((char *)buf + n,
-			    bufsz - n, "\r\n");
-			if (n >= bufsz)
+			if (buf_appendf((char *)buf, bufsz, &n, "\r\n") == -1)
 				return -1;
 
 			p = lend + 2;
@@ -1673,10 +1696,8 @@ build_request(const char *req, size_t reqlen,
 		if (prefix_ci(p, (size_t)(lend - p), "Connection:")) {
 			/* collapse repeated Connection headers into one */
 			if (!have_conn) {
-				size_t w = (size_t)snprintf((char *)buf + n,
-				    bufsz - n, "Connection: close\r\n");
-				n += w;
-				if (n >= bufsz)
+				if (buf_appendf((char *)buf, bufsz, &n,
+				    "Connection: close\r\n") == -1)
 					return -1;
 				have_conn = 1;
 			}
