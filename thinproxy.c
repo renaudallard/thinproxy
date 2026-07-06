@@ -2974,13 +2974,17 @@ main(int argc, char *argv[])
 	/*
 	 * Pre-scan for -f before config parsing.  Use getopt so that
 	 * combined forms like "-vf path" are handled the same as the
-	 * separated "-v -f path".
+	 * separated "-v -f path".  -V is handled here too so a version
+	 * query never depends on the config file parsing cleanly.
 	 */
 	opterr = 0;
 	while ((ch = getopt(argc, argv, "b:dFf:p:u:Vv")) != -1) {
 		if (ch == 'f') {
 			cfgpath = optarg;
 			cfgpath_explicit = 1;
+		} else if (ch == 'V') {
+			fprintf(stderr, "thinproxy %s\n", THINPROXY_VERSION);
+			return 0;
 		}
 	}
 	opterr = 1;
@@ -3024,15 +3028,17 @@ main(int argc, char *argv[])
 			strlcpy(cfg_port, optarg, sizeof(cfg_port));
 			break;
 		case 'u':
+			if (optarg[0] == '\0') {
+				logmsg(LOG_ERR, "-u: empty user name");
+				return 1;
+			}
 			if (strlen(optarg) >= sizeof(cfg_user)) {
 				logmsg(LOG_ERR, "-u: value too long");
 				return 1;
 			}
 			strlcpy(cfg_user, optarg, sizeof(cfg_user));
 			break;
-		case 'V':
-			fprintf(stderr, "thinproxy %s\n", THINPROXY_VERSION);
-			return 0;
+		/* -V is handled in the pre-scan above */
 		case 'v':
 			log_flags = LOGF_ALL;
 			break;
