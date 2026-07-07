@@ -2072,7 +2072,7 @@ handle_resolving(struct conn *c)
 static void
 handle_connecting(struct conn *c)
 {
-	int err;
+	int err = 0;
 	socklen_t sl;
 
 	sl = sizeof(err);
@@ -2315,6 +2315,9 @@ accept_conn(int lfd)
 	int fd, on;
 	struct conn *c;
 
+	/* accept fills only the address length; zero the rest so the copy
+	 * into c->peer carries no uninitialized stack bytes */
+	memset(&ss, 0, sizeof(ss));
 	sl = sizeof(ss);
 #ifdef __OpenBSD__
 	fd = accept4(lfd, (struct sockaddr *)&ss, &sl, SOCK_NONBLOCK);
