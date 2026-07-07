@@ -1,3 +1,17 @@
+thinproxy (0.2.7-1) unstable; urgency=low
+
+  * Fix the build on Linux architectures other than x86_64 and aarch64:
+    the seccomp SIGSYS handler was compiled but unused there, so
+    -Wall -Werror rejected it and the daemon would not build at all.
+  * Initialize err in handle_connecting and zero the accept address so no
+    uninitialized stack bytes are read or copied into the connection.
+  * Report the actual failing syscall (setgroups/setgid/setuid) in the
+    drop_privs privileged branch instead of always logging "setuid".
+  * Add printf format attributes to logmsg and buf_appendf so -Wformat
+    checks their call sites.
+
+ -- Renaud Allard <renaud@allard.it>  Tue, 07 Jul 2026 10:39:14 +0200
+
 thinproxy (0.2.6-1) unstable; urgency=low
 
   * Tear down a relay connection as soon as no descriptor remains that
