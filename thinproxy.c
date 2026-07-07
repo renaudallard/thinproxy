@@ -94,6 +94,14 @@
 # endif
 #endif
 
+#ifndef __printflike
+# if defined(__GNUC__) || defined(__clang__)
+#  define __printflike(f, a)	__attribute__((__format__(__printf__, f, a)))
+# else
+#  define __printflike(f, a)	/* empty */
+# endif
+#endif
+
 /*
  * On non-OpenBSD, provide inline wrappers that use POSIX
  * equivalents instead of BSD functions, avoiding compat
@@ -328,7 +336,7 @@ ign_write(int fd, const void *buf, size_t len)
 	(void)r;
 }
 
-static void
+static void __printflike(2, 3)
 logmsg(int pri, const char *fmt, ...)
 {
 	va_list ap;
@@ -1520,7 +1528,7 @@ parse_request(const char *req, size_t len,
  * Returns 0 on success, -1 on truncation or an snprintf encoding error;
  * the signed return is checked so a negative value cannot wrap *n.
  */
-static int
+static int __printflike(4, 5)
 buf_appendf(char *buf, size_t bufsz, size_t *n, const char *fmt, ...)
 {
 	va_list ap;
