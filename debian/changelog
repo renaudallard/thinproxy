@@ -1,3 +1,11 @@
+thinproxy (0.2.8-1) unstable; urgency=low
+
+  * Reject a config value containing a vertical tab, form feed or carriage
+    return at parse time with a file and line reference, matching the
+    tokenizer's whitespace handling, instead of failing obscurely later.
+
+ -- Renaud Allard <renaud@allard.it>  Tue, 07 Jul 2026 15:50:12 +0200
+
 thinproxy (0.2.7-1) unstable; urgency=low
 
   * Fix the build on Linux architectures other than x86_64 and aarch64:
