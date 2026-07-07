@@ -2847,6 +2847,13 @@ drop_privs(const char *user)
 	BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, (nr), 0, 1), \
 	BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW)
 
+/*
+ * The handler is used only where a BPF filter is actually installed; on
+ * other Linux architectures setup_seccomp skips the filter, so guarding
+ * the definition with the same condition avoids an unused-function error
+ * under -Werror.
+ */
+#if THINPROXY_AUDIT_ARCH != 0
 static void
 seccomp_violation(int sig, siginfo_t *si, void *ctx)
 {
@@ -2872,6 +2879,7 @@ seccomp_violation(int sig, siginfo_t *si, void *ctx)
 	if (write(STDERR_FILENO, buf, (size_t)(p - buf))) { /* nothing */ }
 	_exit(1);
 }
+#endif /* THINPROXY_AUDIT_ARCH != 0 */
 
 static int
 setup_seccomp(void)
