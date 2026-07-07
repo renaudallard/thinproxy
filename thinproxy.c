@@ -2816,9 +2816,15 @@ drop_privs(const char *user)
 		}
 		return 0;
 	}
-	if (setgroups(1, &pw->pw_gid) == -1 ||
-	    setgid(pw->pw_gid) == -1 ||
-	    setuid(pw->pw_uid) == -1) {
+	if (setgroups(1, &pw->pw_gid) == -1) {
+		logmsg(LOG_ERR, "setgroups: %s", strerror(errno));
+		return -1;
+	}
+	if (setgid(pw->pw_gid) == -1) {
+		logmsg(LOG_ERR, "setgid: %s", strerror(errno));
+		return -1;
+	}
+	if (setuid(pw->pw_uid) == -1) {
 		logmsg(LOG_ERR, "setuid: %s", strerror(errno));
 		return -1;
 	}
