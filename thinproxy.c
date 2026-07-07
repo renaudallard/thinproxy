@@ -1066,7 +1066,7 @@ parse_config(const char *path, int must_exist)
 		 * line number rather than letting it fail obscurely later (e.g.
 		 * "port 80 81" reaching getaddrinfo).
 		 */
-		if (strcspn(val, " \t") != strlen(val)) {
+		if (strcspn(val, " \t\n\v\f\r") != strlen(val)) {
 			logmsg(LOG_ERR, "%s:%d: unexpected whitespace in "
 			    "value for %s", path, lineno, key);
 			fclose(fp);
