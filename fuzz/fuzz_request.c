@@ -27,8 +27,18 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	    host, sizeof(host), port, sizeof(port),
 	    path, sizeof(path), &is_connect) == 0) {
 		if (!is_connect) {
+			char hosthdr[300];
+			int brk = (strchr(host, ':') != NULL);
+
+			/* authority for the Host header, as handle_request builds it */
+			if (strcmp(port, "80") == 0)
+				snprintf(hosthdr, sizeof(hosthdr),
+				    brk ? "[%s]" : "%s", host);
+			else
+				snprintf(hosthdr, sizeof(hosthdr),
+				    brk ? "[%s]:%s" : "%s:%s", host, port);
 			build_request(req, size, out, sizeof(out),
-			    method, path);
+			    method, path, hosthdr);
 		}
 	}
 
